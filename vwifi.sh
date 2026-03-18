@@ -421,10 +421,8 @@ write_files:
       modprobe mac80211_hwsim radios=0
 
       # Créer les interfaces wlan via vwifi-add-interfaces
-      for i in \$(seq 0 $(( WLAN_COUNT - 1 ))); do
-        MAC="0a:0b:0c:${vm_hex}:00:\$(printf '%02x' \$i)"
-        vwifi-add-interfaces "\$MAC"
-      done
+      # Syntaxe : vwifi-add-interfaces <nombre> [préfixe_MAC_5_octets]
+      vwifi-add-interfaces ${WLAN_COUNT} "0a:0b:0c:${vm_hex}:00"
 
       # Attendre que le serveur vwifi soit joignable (TCP 8212)
       SERVER="${server_ip}"
