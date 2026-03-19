@@ -258,6 +258,11 @@ USERDATA_EOF
 
     cat >> "$seed_dir/user-data" << USERDATA_EOF
 
+packages:
+  - iw
+  - tcpdump
+  - tmux
+
 write_files:
   - path: /etc/systemd/system/vwifi-server.service
     content: |
@@ -274,6 +279,58 @@ write_files:
 
       [Install]
       WantedBy=multi-user.target
+
+  - path: /usr/local/bin/vwifi-capture
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # vwifi-capture — Capture WiFi spy automatisée via vwifi
+      # Lance vwifi-client en mode spy, configure wlan0 en monitor,
+      # puis démarre tcpdump dans une session tmux nommée "capture".
+      set -e
+
+      cleanup() {
+        echo "[vwifi-capture] Nettoyage..."
+        [ -n "\$VWIFI_PID" ] && kill "\$VWIFI_PID" 2>/dev/null || true
+        exit 0
+      }
+      trap cleanup EXIT INT TERM
+
+      # 1. Charger mac80211_hwsim sans radio physique
+      modprobe mac80211_hwsim radios=0
+
+      # 2. Lancer vwifi-client en mode spy (1 interface)
+      vwifi-client -s -n 1 &
+      VWIFI_PID=\$!
+      echo "[vwifi-capture] vwifi-client spy lancé (PID \$VWIFI_PID)"
+
+      # 3. Attendre que wlan0 apparaisse
+      MAX_WAIT=30
+      WAITED=0
+      while [ ! -d /sys/class/net/wlan0 ]; do
+        sleep 1
+        WAITED=\$((WAITED + 1))
+        if [ \$WAITED -ge \$MAX_WAIT ]; then
+          echo "[vwifi-capture] ERREUR : wlan0 non détectée après \${MAX_WAIT}s" >&2
+          exit 1
+        fi
+      done
+      echo "[vwifi-capture] wlan0 détectée"
+
+      # 4. Passer wlan0 en mode monitor
+      ip link set wlan0 down
+      iw dev wlan0 set monitor control
+      ip link set wlan0 up
+      echo "[vwifi-capture] wlan0 en mode monitor"
+
+      # 5. Lancer tcpdump dans une session tmux
+      tmux new-session -d -s capture "tcpdump -n -i wlan0"
+      echo "[vwifi-capture] Capture démarrée dans tmux session 'capture'"
+      echo "[vwifi-capture] → tmux attach -t capture  (pour voir la capture)"
+      echo "[vwifi-capture] → Ctrl+B, D              (pour détacher sans arrêter)"
+
+      # Attacher automatiquement à la session
+      tmux attach -t capture
 
 runcmd:
   - sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
@@ -376,7 +433,9 @@ EOF
     # Construction de la liste de packages
     local pkg_block="packages:
   - hostapd
-  - wpasupplicant"
+  - wpasupplicant
+  - tmux
+  - iw"
     if [ -f "$PKG_LIST" ]; then
         while IFS= read -r line; do
             [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -743,6 +802,7 @@ print_summary() {
     echo -e "  ${BLUE}── vwifi-server (automatique) ──${NC}"
     echo "  IP VDE    : ${server_ip}/${VDE_MASK}"
     echo "  Service   : vwifi-server -t 8212"
+    echo "  Capture   : sudo vwifi-capture (spy WiFi + tcpdump dans tmux)"
     echo "  RAM       : ${SERVER_RAM}MB | CPUs: $SERVER_CPUS"
     $USE_NAT && echo "  SSH debug : ssh debian@localhost -p $server_ssh"
     echo ""
@@ -750,7 +810,7 @@ print_summary() {
     # Info vwifi invités
     echo -e "  ${BLUE}── VMs invités (vwifi-client) ──${NC}"
     echo "  Interfaces wlan : $WLAN_COUNT par VM (mac80211_hwsim)"
-    echo "  Packages : hostapd, wpasupplicant"
+    echo "  Packages : hostapd, wpasupplicant, tmux, iw"
     echo ""
 
     # Avertissement temps de boot
