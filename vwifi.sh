@@ -843,7 +843,38 @@ print_summary() {
     fi
 
     echo ""
-    echo "  Arrêt propre :"
+
+    # Accès SSH
+    echo -e "  ${BLUE}── Accès SSH ──${NC}"
+    echo "  Login    : debian"
+    if [ -n "$CLOUD_PASS" ]; then
+        echo "  Password : ****  (mot de passe défini)"
+    elif [ -f "$SSH_KEY_FILE" ]; then
+        echo "  Auth     : clé SSH ($SSH_KEY_FILE)"
+    else
+        echo "  Password : debian  (défaut image — peut échouer)"
+    fi
+    echo ""
+    for info_line in "${VM_INFO[@]}"; do
+        IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
+        echo "  $vm → ssh debian@localhost -p $ssh_port   (VDE: ${ip}/${VDE_MASK})"
+    done
+    $USE_NAT && echo "  Serveur → ssh debian@localhost -p $server_ssh   (VDE: ${server_ip}/${VDE_MASK})"
+    echo ""
+
+    # Capture Wireshark
+    echo -e "  ${BLUE}── Capture Wireshark (port mirroring) ──${NC}"
+    echo "  Une fois les VMs démarrées, ouvrir un nouveau terminal :"
+    echo ""
+    echo "    ./$(basename "$0") --mirror"
+    echo ""
+    echo "  Puis lancer Wireshark :"
+    echo ""
+    echo "    sudo wireshark -k -i $MIRROR_PIPE"
+    echo ""
+
+    # Arrêt propre
+    echo -e "  ${BLUE}── Arrêt propre ──${NC}"
     echo "    ./$(basename "$0") --stop"
     echo "    # ou : pkill -f qemu-system-x86_64; pkill vde_switch; rm -rf /tmp/vde"
     echo "=================================================================="
