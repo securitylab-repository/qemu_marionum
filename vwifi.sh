@@ -31,6 +31,7 @@
 #   --ssh-key F      Clé publique SSH à injecter (défaut: ~/.ssh/id_ed25519.pub)
 #   --password P     Mot de passe en clair pour l'utilisateur debian (sera hashé)
 #   --wlan-count N   Nombre d'interfaces wlan par VM invité (défaut: 1)
+#   --recap          Ré-afficher le récapitulatif du lab en cours
 #   --stop           Arrêter le lab (VMs + switch VDE)
 #   --help           Afficher l'aide
 #
@@ -81,6 +82,7 @@ VDE_MGMT="/tmp/vde/mgmt"
 QEMU="qemu-system-x86_64"
 DISK=""
 STOP=false
+RECAP=false
 PIDS=()
 VM_INFO=()
 
@@ -113,6 +115,7 @@ parse_args() {
             --ssh-key)    SSH_KEY_FILE="$2";  shift 2 ;;
             --password)   CLOUD_PASS="$2";    shift 2 ;;
             --wlan-count) WLAN_COUNT="$2";    shift 2 ;;
+            --recap)      RECAP=true;         shift ;;
             --stop)       STOP=true;          shift ;;
             --help)
                 sed -n '3,43p' "$0" | sed 's/^# \{0,1\}//' | sed "s/vwifi\.sh/$(basename "$0")/g"
@@ -801,6 +804,18 @@ EOF
 print_summary() {
     local server_ip="${VDE_PREFIX}.${SERVER_IP_LAST}"
     local server_ssh=$((BASE_SSH + 100))
+    local summary_file="/tmp/vde/summary.txt"
+
+    # Capturer le résumé dans un fichier et l'afficher en même temps
+    _print_summary_content | tee "$summary_file"
+
+    printf "%s\n" "${PIDS[@]}" > /tmp/vde/vm_pids.txt
+    info "PIDs sauvegardés dans /tmp/vde/vm_pids.txt"
+}
+
+_print_summary_content() {
+    local server_ip="${VDE_PREFIX}.${SERVER_IP_LAST}"
+    local server_ssh=$((BASE_SSH + 100))
 
     echo ""
     echo "=================================================================="
@@ -889,14 +904,16 @@ print_summary() {
     echo "    sudo wireshark -k -i $MIRROR_PIPE"
     echo ""
 
+    # Récapitulatif
+    echo -e "  ${BLUE}── Récapitulatif ──${NC}"
+    echo "    ./$(basename "$0") --recap"
+    echo ""
+
     # Arrêt propre
     echo -e "  ${BLUE}── Arrêt propre ──${NC}"
     echo "    ./$(basename "$0") --stop"
     echo "    # ou : pkill -f qemu-system-x86_64; pkill vde_switch; rm -rf /tmp/vde"
     echo "=================================================================="
-
-    printf "%s\n" "${PIDS[@]}" > /tmp/vde/vm_pids.txt
-    info "PIDs sauvegardés dans /tmp/vde/vm_pids.txt"
 }
 
 # =============================================================================
@@ -1013,6 +1030,7 @@ stop_lab() {
 parse_args "$@"
 
 $STOP   && stop_lab   && exit 0
+$RECAP  && { [ -f /tmp/vde/summary.txt ] && cat /tmp/vde/summary.txt || error "Aucun récapitulatif trouvé — le lab n'est pas démarré"; } && exit 0
 $MIRROR && check_deps && start_mirror && exit 0
 
 check_deps
