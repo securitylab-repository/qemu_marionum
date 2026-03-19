@@ -297,7 +297,7 @@ write_files:
       trap cleanup EXIT INT TERM
 
       # 1. Charger mac80211_hwsim sans radio physique
-      modprobe mac80211_hwsim radios=0
+      sudo modprobe mac80211_hwsim radios=0
 
       # 2. Lancer vwifi-client en mode spy (1 interface)
       vwifi-client -s -n 1 &
@@ -477,7 +477,7 @@ write_files:
     content: |
       #!/bin/bash
       # Charger mac80211_hwsim sans radio physique
-      modprobe mac80211_hwsim radios=0
+      sudo modprobe mac80211_hwsim radios=0
 
       # Créer les interfaces wlan via vwifi-add-interfaces
       # Syntaxe : vwifi-add-interfaces <nombre> [préfixe_MAC_5_octets]
