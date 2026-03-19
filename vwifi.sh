@@ -49,7 +49,7 @@ set -e
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+BLUE='\033[0;36m'
 NC='\033[0m'
 
 info()    { echo -e "${GREEN}[INFO]${NC} $1"; }
@@ -264,6 +264,14 @@ packages:
   - tmux
 
 write_files:
+  - path: /etc/motd
+    content: |
+      =============================================
+        VWIFI EFREI PARIS
+        Author : Boussad AIT SALEM
+        VM     : vwifi-server
+      =============================================
+
   - path: /etc/systemd/system/vwifi-server.service
     content: |
       [Unit]
@@ -472,6 +480,14 @@ USERDATA_EOF
 ${pkg_block}
 
 write_files:
+  - path: /etc/motd
+    content: |
+      =============================================
+        VWIFI EFREI PARIS
+        Author : Boussad AIT SALEM
+        VM     : debian-vm${vm_num}
+      =============================================
+
   - path: /usr/local/bin/vwifi-guest-setup.sh
     permissions: '0755'
     content: |
@@ -693,7 +709,7 @@ EOF
     info "vwifi-server | $SERVER_MAC_VDE | $server_ip/${VDE_MASK} | $DISK_MODE$([ "$USE_NAT" = true ] && echo " | SSH: localhost:$ssh_port" || echo '')"
 
     xterm -title "vwifi-server (auto) — ${server_ip}" \
-          -geometry 120x30 \
+          -geometry 90x24 \
           -fa "DejaVu Sans Mono" \
           -fs 10 \
           -tn xterm-256color \
@@ -764,7 +780,7 @@ EOF
     info "VM${vm_num} | $mac_vde | $static_ip/${VDE_MASK} | $DISK_MODE | wlan: $WLAN_COUNT$([ "$USE_NAT" = true ] && echo " | SSH: localhost:$ssh_port" || echo '')"
 
     xterm -title "VM${vm_num} — ${static_ip} — vwifi-client" \
-          -geometry 120x30 \
+          -geometry 90x24 \
           -fa "DejaVu Sans Mono" \
           -fs 10 \
           -tn xterm-256color \
