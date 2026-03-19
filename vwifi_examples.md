@@ -5,12 +5,6 @@
 
 ## Test 1 : WPA
 
-### Packages needed on the guests for this test
-
-```bash
-sudo apt install hostapd wpasupplicant
-```
-
 ### Guests
 
 * Guest Wifi 1 :
@@ -18,7 +12,7 @@ sudo apt install hostapd wpasupplicant
 ```bash
 sudo ip a a 10.0.0.1/8 dev wlan0
 
-sudo hostapd tests/hostapd_wpa.conf
+sudo hostapd /home/debian/vwifi/tests/hostapd_wpa.conf
 ```
 
 * Guest Wifi 2 :
@@ -31,19 +25,18 @@ ping 10.0.0.1
 
 * Guest Wifi 3 :
 ```bash
-sudo wpa_supplicant -Dnl80211 -iwlan0 -c tests/wpa_supplicant.conf
+sudo wpa_supplicant -Dnl80211 -iwlan0 -c /home/debian/vwifi/tests/wpa_supplicant.conf
 
 sudo ip a a 10.0.0.3/8 dev wlan0
 ping 10.0.0.2
 ```
 
-## Test 2 : Open
-
-### Packages needed on the guests for this test
-
+* Capture de paquets sur la vm vwifi-server :
 ```bash
-sudo apt install hostapd iw tcpdump
-```
+sudo tcpdump -n -i wlan0 -w vwifi_capture_wlan0.pcap
+``` 
+
+## Test 2 : Open
 
 ### Guests
 
@@ -52,7 +45,7 @@ sudo apt install hostapd iw tcpdump
 ```bash
 sudo ip a a 10.0.0.1/8 dev wlan0
 
-sudo hostapd tests/hostapd_open.conf
+sudo hostapd /home/vwifi/tests/hostapd_open.conf
 ```
 
 * Guest Wifi 2 :
@@ -67,22 +60,18 @@ ping 10.0.0.1
 * Guest Wifi 3 :
 ```bash
 sudo ip link set up wlan0
-sudo tcpdump -n -e -I -i wlan0 -w /hosthome/projects/vwifi_capture_wlan0.pcap
+sudo tcpdump -n -e -I -i wlan0 -w vwifi_capture_wlan0.pcap
 ```
 
 ### Host
 
 ```bash
-tail -f -c +0b /home/user/projects/vwifi_capture_wlan0.pcap | wireshark -k -i -
+tail -f -c +0b vwifi_capture_wlan0.pcap | wireshark -k -i -
 ```
 
 ## Test 3 : Ad-Hoc
 
 ### Packages needed on the guests for this test
-
-```bash
-sudo apt install iw
-```
 
 ### Guests
 
@@ -109,9 +98,6 @@ ping 10.0.0.1
 
 ### Packages needed on the guests for this test
 
-```bash
-sudo apt install hostapd
-```
 
 ### Guests
 
@@ -120,7 +106,7 @@ sudo apt install hostapd
 ```bash
 sudo ip a a 10.0.0.1/8 dev wlan0
 
-sudo hostapd tests/hostapd_wep.conf
+sudo hostapd /home/debian/vwifi/tests/hostapd_wep.conf
 ```
 
 * Guest Wifi 2 :
