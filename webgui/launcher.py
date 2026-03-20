@@ -320,6 +320,19 @@ echo -n "{static_ip}/{vde_mask}" > "$IP_FILE_VM{vm_num}"
 """
 
 
+def _resolve_drive_arg(vm_num, resolved):
+    """Retourne l'argument -drive QEMU avec le chemin reel du disque."""
+    disk = resolved["disk"]
+    mode = resolved["disk_mode"]
+    if mode == "shared":
+        return f"-drive file={disk},format=qcow2,if=virtio"
+    elif mode == "snapshot":
+        return f"-drive file={disk},format=qcow2,if=virtio,snapshot=on"
+    elif mode in ("overlay", "copy"):
+        return f"-drive file=/tmp/vde/vm{vm_num}-disk.qcow2,format=qcow2,if=virtio"
+    return f"-drive file={disk},format=qcow2,if=virtio,snapshot=on"
+
+
 def _qemu_launch_block(vm_num, resolved, g, backend):
     vde_prefix = _vde_prefix(g["vde_net"])
     ip_last = g["base_ip"] + vm_num - 1
@@ -332,20 +345,26 @@ def _qemu_launch_block(vm_num, resolved, g, backend):
     cpu = resolved["cpu"]
     disk_mode = resolved["disk_mode"]
 
+    # Resoudre les valeurs inline (pas de references $VAR dans le heredoc)
+    drive_arg = _resolve_drive_arg(vm_num, resolved)
+    vde_socket = "/tmp/vde/switch"
+    seeds_dir = g["seeds_dir"]
+    net_script = g.get("net_script") or "/tmp/setup-net.sh"
+
     if backend in ("cloudinit", "vwifi"):
-        vde_args = f'-netdev vde,id=vde0,sock=$VDE_SOCKET -device virtio-net-pci,netdev=vde0,mac={mac_vde},addr=0x4'
+        vde_args = f'-netdev vde,id=vde0,sock={vde_socket} -device virtio-net-pci,netdev=vde0,mac={mac_vde},addr=0x4'
         nat_args = ""
         if not g["no_nat"]:
             nat_args = f'-netdev user,id=nat0,hostfwd=tcp::{ssh_port}-:22 -device virtio-net-pci,netdev=nat0,mac={mac_nat},addr=0x5'
-        seed_arg = f'-drive file=$SEED_ISO_VM{vm_num},format=raw,if=virtio,readonly=on'
+        seed_arg = f'-drive file={seeds_dir}/seed-vm{vm_num}.iso,format=raw,if=virtio,readonly=on'
         fw_cfg_args = ""
     else:
-        vde_args = f'-netdev vde,id=vde0,sock=$VDE_SOCKET -device virtio-net-pci,netdev=vde0,mac={mac_vde}'
+        vde_args = f'-netdev vde,id=vde0,sock={vde_socket} -device virtio-net-pci,netdev=vde0,mac={mac_vde}'
         nat_args = ""
         if not g["no_nat"]:
             nat_args = f'-nic user,hostfwd=tcp::{ssh_port}-:22,mac={mac_nat}'
         seed_arg = ""
-        fw_cfg_args = f'-fw_cfg name=opt/setup-net.sh,file=$NET_SCRIPT -fw_cfg name=opt/vm-ip,file=$IP_FILE_VM{vm_num}'
+        fw_cfg_args = f'-fw_cfg name=opt/setup-net.sh,file={net_script} -fw_cfg name=opt/vm-ip,file=/tmp/vde/vm{vm_num}-ip'
 
     if backend == "fwcfg":
         geometry = "100x25"
@@ -354,12 +373,12 @@ def _qemu_launch_block(vm_num, resolved, g, backend):
         geometry = "120x30"
         xterm_colors = '-bg "#1e1e1e" -fg "#d4d4d4" '
 
-    # Build QEMU command lines
+    # Construire la commande QEMU avec valeurs inline
     qemu_lines = [
-        "$QEMU \\",
+        "qemu-system-x86_64 \\",
         "    -accel tcg,thread=multi -cpu qemu64 \\",
         f"    -m {ram} -smp {cpu} \\",
-        f"    $DRIVE_VM{vm_num} \\",
+        f"    {drive_arg} \\",
     ]
     if seed_arg:
         qemu_lines.append(f"    {seed_arg} \\")
