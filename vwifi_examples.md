@@ -17,7 +17,7 @@ sudo hostapd /home/debian/vwifi/tests/hostapd_wpa.conf
 
 * Guest Wifi 2 :
 ```bash
-sudo wpa_supplicant -Dnl80211 -iwlan0 -c tests/wpa_supplicant.conf
+sudo wpa_supplicant -Dnl80211 -iwlan0 -c /home/debian/vwifi/tests/wpa_supplicant.conf
 
 sudo ip a a 10.0.0.2/8 dev wlan0
 ping 10.0.0.1
@@ -45,7 +45,7 @@ sudo tcpdump -n -i wlan0 -w vwifi_capture_wlan0.pcap
 ```bash
 sudo ip a a 10.0.0.1/8 dev wlan0
 
-sudo hostapd /home/vwifi/tests/hostapd_open.conf
+sudo hostapd /home/debian/vwifi/tests/hostapd_open.conf
 ```
 
 * Guest Wifi 2 :

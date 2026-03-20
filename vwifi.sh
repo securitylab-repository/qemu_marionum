@@ -893,6 +893,14 @@ _print_summary_content() {
     $USE_NAT && echo "  Serveur → ssh debian@localhost -p $server_ssh   (VDE: ${server_ip}/${VDE_MASK})"
     echo ""
 
+    # Récupérer des fichiers
+    echo -e "  ${BLUE}── Récupérer des fichiers (scp) ──${NC}"
+    for info_line in "${VM_INFO[@]}"; do
+        IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
+        echo "  $vm → scp -P $ssh_port debian@localhost:/chemin/fichier ."
+    done
+    echo ""
+
     # Capture Wireshark
     echo -e "  ${BLUE}── Capture Wireshark (port mirroring) ──${NC}"
     echo "  Une fois les VMs démarrées, ouvrir un nouveau terminal :"
