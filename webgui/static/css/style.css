@@ -247,17 +247,26 @@ body {
 }
 
 /* Noeuds VM */
+.vm-node {
+    cursor: pointer;
+}
+
 .vm-node rect.vm-bg {
     fill: var(--accent-blue);
     rx: 6;
     ry: 6;
     stroke: #7ab8ff;
     stroke-width: 1.5;
-    transition: filter 0.15s;
+    transition: filter 0.15s, stroke 0.15s, stroke-width 0.15s;
 }
 
 .vm-node:hover rect.vm-bg {
     filter: brightness(1.2);
+}
+
+.vm-selected rect.vm-bg {
+    stroke: var(--accent-yellow);
+    stroke-width: 3;
 }
 
 .vm-node text {
@@ -439,6 +448,59 @@ fieldset label input[type="checkbox"] {
 .form-row-checkbox label {
     flex: none;
     font-size: 0.82rem;
+}
+
+/* Per-VM config panel */
+#vm-config-panel {
+    display: none;
+    border: 2px solid var(--accent-yellow);
+    border-radius: var(--radius);
+    padding: 10px;
+    margin-bottom: 10px;
+    background: rgba(236, 201, 75, 0.05);
+}
+
+#vm-config-panel.visible {
+    display: block;
+}
+
+#vm-config-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+#vm-config-header h4 {
+    font-size: 0.85rem;
+    color: var(--accent-yellow);
+    font-weight: 700;
+    margin: 0;
+}
+
+#btn-global-config {
+    padding: 3px 8px;
+    font-size: 0.7rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+#btn-global-config:hover {
+    background: var(--border-color);
+}
+
+#vm-config-panel .form-row label {
+    flex: 0 0 90px;
+}
+
+/* VM info subtitle on SVG node */
+.vm-node text.vm-info {
+    font-size: 8px;
+    font-weight: 400;
+    fill: var(--accent-yellow);
 }
 
 /* Scan disks button placement */

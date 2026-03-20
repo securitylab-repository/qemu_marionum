@@ -7,6 +7,7 @@ import threading
 import time
 import glob as globmod
 from flask import Flask, render_template, jsonify, request
+from launcher import generate_launcher
 
 app = Flask(__name__)
 
@@ -155,11 +156,19 @@ def api_output():
 # --- Construction de commande ---
 
 def build_command(params):
-    """Construit la liste d'arguments CLI a partir des parametres JSON."""
+    """Construit la liste d'arguments CLI a partir des parametres JSON.
+
+    Si la cle 'vms' est presente (config per-VM), genere un script via
+    launcher.py au lieu d'appeler directement le backend.
+    """
     backend = params.get("backend", "fwcfg")
     disk = params.get("disk", "")
     if not disk:
         return None
+
+    # Per-VM : generer un script de lancement
+    if "vms" in params:
+        return generate_launcher(params)
 
     scripts = {
         "fwcfg": "./fwcfg.sh",

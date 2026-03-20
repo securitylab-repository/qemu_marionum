@@ -2,7 +2,7 @@
  * app.js — Logique principale de l'interface web
  *
  * Initialisation, drag-and-drop HTML5, appels API, polling de sortie,
- * et mise a jour live de l'apercu CLI.
+ * gestion per-VM, et mise a jour live de l'apercu CLI.
  */
 
 /* global Topology, Config */
@@ -12,7 +12,12 @@
 
     // Etat de l'application
     const state = {
-        vmCount: 2,
+        vms: [
+            { id: 1, disk: "", ram: null, cpu: null, diskMode: null },
+            { id: 2, disk: "", ram: null, cpu: null, diskMode: null },
+        ],
+        selectedVmId: null,
+        nextVmId: 3,
         backend: "cloudinit",
         noNat: false,
         hub: false,
@@ -44,6 +49,7 @@
         setupDragAndDrop();
         setupBackendRadios();
         setupFormListeners();
+        setupVmFormListeners();
         setupButtons();
         setupOutputToggle();
         scanDisks();
@@ -82,18 +88,36 @@
 
         // Bouton retirer VM
         document.getElementById("btn-remove-vm").addEventListener("click", () => {
-            if (state.vmCount > 0) {
-                state.vmCount--;
+            if (state.vms.length > 0) {
+                // Retirer la derniere VM
+                const removed = state.vms.pop();
+                if (state.selectedVmId === removed.id) {
+                    state.selectedVmId = null;
+                }
                 updateAll();
             }
         });
 
-        // Clic sur bouton supprimer dans le canvas
+        // Clic sur le canvas : selection VM ou bouton supprimer
         canvas.addEventListener("click", (e) => {
+            // Bouton supprimer
             const delBtn = e.target.closest(".vm-delete");
             if (delBtn) {
-                removeVM(parseInt(delBtn.getAttribute("data-vm-index"), 10));
+                const vmId = parseInt(delBtn.getAttribute("data-vm-id"), 10);
+                removeVM(vmId);
+                return;
             }
+
+            // Clic sur un noeud VM
+            const vmNode = e.target.closest(".vm-node");
+            if (vmNode) {
+                const vmId = parseInt(vmNode.getAttribute("data-vm-id"), 10);
+                selectVM(vmId);
+                return;
+            }
+
+            // Clic sur le fond → deselectionner
+            deselectVM();
         });
     }
 
@@ -109,10 +133,9 @@
         });
     }
 
-    // --- Form listeners ---
+    // --- Form listeners (global) ---
 
     function setupFormListeners() {
-        // Tous les inputs/selects qui influencent la commande CLI
         const ids = [
             "disk-path", "opt-ram", "opt-cpu", "opt-disk-mode",
             "opt-vde-net", "opt-base-ip", "opt-base-ssh", "opt-pkg-list",
@@ -130,8 +153,60 @@
                 syncState();
                 updateCLI();
                 renderCanvas();
+                // Mettre a jour les placeholders du panel per-VM
+                Config.updateVmPanel(state);
             });
         });
+    }
+
+    // --- Form listeners (per-VM) ---
+
+    function setupVmFormListeners() {
+        const vmFields = {
+            "vm-disk-path": "disk",
+            "vm-opt-ram": "ram",
+            "vm-opt-cpu": "cpu",
+            "vm-opt-disk-mode": "diskMode",
+        };
+
+        Object.entries(vmFields).forEach(([id, prop]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener("input", () => {
+                if (state.selectedVmId === null) return;
+                const vm = state.vms.find(v => v.id === state.selectedVmId);
+                if (!vm) return;
+
+                if (prop === "disk" || prop === "diskMode") {
+                    vm[prop] = el.value.trim() || null;
+                } else {
+                    const num = parseInt(el.value, 10);
+                    vm[prop] = isNaN(num) ? null : num;
+                }
+
+                updateCLI();
+                renderCanvas();
+            });
+            // Also listen for change on select
+            if (el.tagName === "SELECT") {
+                el.addEventListener("change", () => {
+                    if (state.selectedVmId === null) return;
+                    const vm = state.vms.find(v => v.id === state.selectedVmId);
+                    if (!vm) return;
+                    vm[prop] = el.value || null;
+                    updateCLI();
+                    renderCanvas();
+                });
+            }
+        });
+
+        // Bouton retour config globale
+        const btnGlobal = document.getElementById("btn-global-config");
+        if (btnGlobal) {
+            btnGlobal.addEventListener("click", () => {
+                deselectVM();
+            });
+        }
     }
 
     // --- Boutons ---
@@ -164,15 +239,40 @@
     // --- VM management ---
 
     function addVM() {
-        state.vmCount++;
+        const vm = {
+            id: state.nextVmId++,
+            disk: "",
+            ram: null,
+            cpu: null,
+            diskMode: null,
+        };
+        state.vms.push(vm);
+        selectVM(vm.id);
         updateAll();
     }
 
-    function removeVM(index) {
-        if (state.vmCount > 0) {
-            state.vmCount--;
-            updateAll();
+    function removeVM(vmId) {
+        const idx = state.vms.findIndex(v => v.id === vmId);
+        if (idx === -1) return;
+        state.vms.splice(idx, 1);
+        if (state.selectedVmId === vmId) {
+            state.selectedVmId = null;
         }
+        updateAll();
+    }
+
+    function selectVM(vmId) {
+        const vm = state.vms.find(v => v.id === vmId);
+        if (!vm) return;
+        state.selectedVmId = vmId;
+        Config.updateVmPanel(state);
+        renderCanvas();
+    }
+
+    function deselectVM() {
+        state.selectedVmId = null;
+        Config.updateVmPanel(state);
+        renderCanvas();
     }
 
     // --- State sync ---
@@ -191,6 +291,7 @@
         syncState();
         renderCanvas();
         updateCLI();
+        Config.updateVmPanel(state);
     }
 
     function renderCanvas() {
@@ -198,19 +299,19 @@
     }
 
     function updateCLI() {
-        const params = Config.gatherFormParams(state.vmCount);
+        const params = Config.gatherFormParams(state.vms);
         cliPreview.textContent = Config.buildCommandString(params);
     }
 
     // --- API calls ---
 
     async function launchLab() {
-        const params = Config.gatherFormParams(state.vmCount);
+        const params = Config.gatherFormParams(state.vms);
         if (!params.disk) {
             alert("Veuillez specifier un chemin d'image disque.");
             return;
         }
-        if (state.vmCount < 1) {
+        if (state.vms.length < 1) {
             alert("Ajoutez au moins une VM sur le canvas.");
             return;
         }

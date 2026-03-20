@@ -2,7 +2,8 @@
  * config.js — Panel de configuration et construction CLI
  *
  * Gere les champs specifiques par backend, la collecte des parametres
- * du formulaire, et la construction de la commande CLI pour l'apercu.
+ * du formulaire, la configuration per-VM, et la construction de la
+ * commande CLI pour l'apercu.
  */
 
 /* exported Config */
@@ -58,13 +59,84 @@ const Config = (() => {
     }
 
     /**
-     * Collecte tous les parametres du formulaire en objet JS.
+     * Met a jour le panel per-VM selon l'etat de selection.
      */
-    function gatherFormParams(vmCount) {
+    function updateVmPanel(state) {
+        const panel = document.getElementById("vm-config-panel");
+        const title = document.getElementById("vm-config-title");
+        if (!panel) return;
+
+        if (state.selectedVmId === null) {
+            panel.classList.remove("visible");
+            return;
+        }
+
+        const vm = state.vms.find(v => v.id === state.selectedVmId);
+        if (!vm) {
+            panel.classList.remove("visible");
+            return;
+        }
+
+        panel.classList.add("visible");
+        title.textContent = `VM${vm.id}`;
+
+        // Valeurs globales pour les placeholders
+        const globalDisk = document.getElementById("disk-path")?.value?.trim() || "(aucun)";
+        const globalRam = document.getElementById("opt-ram")?.value || "";
+        const globalCpu = document.getElementById("opt-cpu")?.value || "";
+        const globalDiskMode = document.getElementById("opt-disk-mode")?.value || "snapshot";
+
+        // Remplir les champs per-VM
+        const diskInput = document.getElementById("vm-disk-path");
+        const ramInput = document.getElementById("vm-opt-ram");
+        const cpuInput = document.getElementById("vm-opt-cpu");
+        const diskModeSelect = document.getElementById("vm-opt-disk-mode");
+
+        if (diskInput) {
+            diskInput.value = vm.disk || "";
+            diskInput.placeholder = globalDisk ? globalDisk : "(herite du global)";
+        }
+        if (ramInput) {
+            ramInput.value = vm.ram || "";
+            ramInput.placeholder = globalRam;
+        }
+        if (cpuInput) {
+            cpuInput.value = vm.cpu || "";
+            cpuInput.placeholder = globalCpu;
+        }
+        if (diskModeSelect) {
+            diskModeSelect.value = vm.diskMode || "";
+            // Mettre a jour le texte de l'option globale
+            const globalOpt = diskModeSelect.querySelector('option[value=""]');
+            if (globalOpt) {
+                globalOpt.textContent = `(global: ${globalDiskMode})`;
+            }
+        }
+    }
+
+    /**
+     * Verifie si une VM a une config differente du global.
+     */
+    function vmHasOverride(vm) {
+        return !!(vm.disk || vm.ram || vm.cpu || vm.diskMode);
+    }
+
+    /**
+     * Verifie si au moins une VM a une surcharge.
+     */
+    function hasAnyPerVmConfig(vms) {
+        return vms.some(vmHasOverride);
+    }
+
+    /**
+     * Collecte tous les parametres du formulaire en objet JS.
+     * Si des VMs ont des surcharges, inclut la cle `vms`.
+     */
+    function gatherFormParams(vms) {
         const backend = document.querySelector('input[name="backend"]:checked')?.value || "cloudinit";
         const params = {
             backend: backend,
-            count: vmCount,
+            count: vms.length,
             disk: document.getElementById("disk-path")?.value?.trim() || "",
             ram: parseInt(document.getElementById("opt-ram")?.value, 10) || undefined,
             cpu: parseInt(document.getElementById("opt-cpu")?.value, 10) || undefined,
@@ -106,6 +178,17 @@ const Config = (() => {
             if (wc) params.wlan_count = wc;
         }
 
+        // Per-VM config si au moins une VM a une surcharge
+        if (hasAnyPerVmConfig(vms)) {
+            params.vms = vms.map(vm => ({
+                id: vm.id,
+                disk: vm.disk || null,
+                ram: vm.ram || null,
+                cpu: vm.cpu || null,
+                disk_mode: vm.diskMode || null,
+            }));
+        }
+
         // Nettoyer les undefined
         Object.keys(params).forEach(k => {
             if (params[k] === undefined || params[k] === "") {
@@ -124,6 +207,23 @@ const Config = (() => {
         const cfg = BACKEND_CONFIG[backend];
         if (!cfg) return "";
 
+        // Mode per-VM : affichage multi-ligne
+        if (params.vms) {
+            const lines = ["# Mode per-VM — script genere dans /tmp/vde/webgui-launch.sh"];
+            lines.push(`# Backend: ${cfg.label} | ${params.count} VMs`);
+            lines.push("");
+            params.vms.forEach((vm, i) => {
+                const parts = [`VM${vm.id}:`];
+                parts.push(`disk=${vm.disk || params.disk || "<image>"}`);
+                parts.push(`ram=${vm.ram || params.ram || "default"}`);
+                parts.push(`cpu=${vm.cpu || params.cpu || "default"}`);
+                parts.push(`mode=${vm.disk_mode || params.disk_mode || "snapshot"}`);
+                lines.push("  " + parts.join("  "));
+            });
+            return lines.join("\n");
+        }
+
+        // Mode simple : commande classique
         const parts = [cfg.script];
 
         parts.push("--count", String(params.count || 2));
@@ -178,6 +278,7 @@ const Config = (() => {
     return {
         BACKEND_CONFIG,
         switchBackend,
+        updateVmPanel,
         gatherFormParams,
         buildCommandString,
         getSelectedBackend,

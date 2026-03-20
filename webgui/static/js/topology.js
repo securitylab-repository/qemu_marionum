@@ -5,7 +5,6 @@
  * les lignes de connexion et le placement circulaire.
  */
 
-/* global state.vmCount, state.backend, state.noNat */
 /* exported Topology */
 
 const Topology = (() => {
@@ -83,11 +82,13 @@ const Topology = (() => {
         const cy = H / 2;
         const radius = Math.min(W, H) * 0.3;
 
-        const vmCount = state.vmCount || 0;
+        const vms = state.vms || [];
+        const vmCount = vms.length;
         const backend = state.backend || "cloudinit";
         const noNat = state.noNat || false;
         const vdeNet = state.vdeNet || "192.168.100.0/24";
         const baseIP = state.baseIP || 10;
+        const selectedVmId = state.selectedVmId;
 
         // Groupe pour les lignes (arriere-plan)
         const gLines = svgEl("g", { class: "lines-group" });
@@ -160,7 +161,6 @@ const Topology = (() => {
             srvText1.textContent = "vwifi-server";
             gSrv.appendChild(srvText1);
 
-            const srvIP = vmIP(-parseInt(baseIP, 10) + 2, vdeNet, parseInt(baseIP, 10));
             const parts = vdeNet.split("/")[0].split(".");
             const srvIPText = `${parts[0]}.${parts[1]}.${parts[2]}.2`;
             const srvText2 = svgEl("text", {
@@ -174,7 +174,10 @@ const Topology = (() => {
         }
 
         // --- VMs ---
+        const globalDisk = document.getElementById("disk-path")?.value?.trim() || "";
+
         vmPositions.forEach((pos, i) => {
+            const vm = vms[i];
             const vmX = pos.x - VM_W / 2;
             const vmY = pos.y - VM_H / 2;
 
@@ -185,7 +188,9 @@ const Topology = (() => {
                 class: "link-line",
             }));
 
-            const gVM = svgEl("g", { class: "vm-node", "data-vm-index": i });
+            const isSelected = vm.id === selectedVmId;
+            const classes = "vm-node" + (isSelected ? " vm-selected" : "");
+            const gVM = svgEl("g", { class: classes, "data-vm-id": vm.id });
 
             // Fond
             gVM.appendChild(svgEl("rect", {
@@ -196,24 +201,43 @@ const Topology = (() => {
 
             // Nom
             const nameText = svgEl("text", {
-                x: pos.x, y: pos.y - 4,
+                x: pos.x, y: pos.y - 8,
             });
-            nameText.textContent = `VM${i + 1}`;
+            nameText.textContent = `VM${vm.id}`;
             gVM.appendChild(nameText);
 
             // IP
             const ip = vmIP(i, vdeNet, baseIP);
             const ipText = svgEl("text", {
-                x: pos.x, y: pos.y + 12,
+                x: pos.x, y: pos.y + 6,
                 class: "vm-ip",
             });
             ipText.textContent = ip;
             gVM.appendChild(ipText);
 
+            // Info per-VM (si config differente du global)
+            const hasOverride = vm.disk || vm.ram || vm.cpu || vm.diskMode;
+            if (hasOverride) {
+                const infoText = svgEl("text", {
+                    x: pos.x, y: pos.y + 18,
+                    class: "vm-info",
+                });
+                const infoParts = [];
+                if (vm.disk) {
+                    const name = vm.disk.split("/").pop();
+                    infoParts.push(name.length > 12 ? name.substring(0, 12) + "..." : name);
+                }
+                if (vm.ram) infoParts.push(vm.ram + "M");
+                if (vm.cpu) infoParts.push(vm.cpu + "cpu");
+                if (vm.diskMode) infoParts.push(vm.diskMode);
+                infoText.textContent = infoParts.join(" | ");
+                gVM.appendChild(infoText);
+            }
+
             // Bouton supprimer
             const gDel = svgEl("g", {
                 class: "vm-delete",
-                "data-vm-index": i,
+                "data-vm-id": vm.id,
             });
             gDel.appendChild(svgEl("circle", {
                 cx: vmX + VM_W - 2, cy: vmY + 2,
