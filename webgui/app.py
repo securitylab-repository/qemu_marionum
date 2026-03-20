@@ -109,7 +109,7 @@ def api_stop():
 
     try:
         result = subprocess.run(
-            [script, "--stop"],
+            ["bash", script, "--stop"],
             capture_output=True, text=True,
             cwd=PROJECT_ROOT,
             timeout=15,
@@ -170,7 +170,7 @@ def build_command(params):
     if not script:
         return None
 
-    cmd = [script]
+    cmd = ["bash", script]
 
     # Options communes
     count = params.get("count", 2)
