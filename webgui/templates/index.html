@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>qemu_marionum — Lab Builder</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header id="header">
+        <div class="header-left">
+            <h1>qemu_marionum</h1>
+            <span class="subtitle">Lab Builder</span>
+        </div>
+        <div class="header-right">
+            <span id="status-badge" class="badge badge-idle">Idle</span>
+            <button id="btn-launch" class="btn btn-launch">Lancer</button>
+            <button id="btn-stop" class="btn btn-stop" disabled>Stopper</button>
+        </div>
+    </header>
+
+    <!-- Main layout -->
+    <div id="main">
+        <!-- Palette gauche -->
+        <aside id="palette">
+            <h3>Palette</h3>
+            <div
+                id="pc-icon"
+                class="palette-item"
+                draggable="true"
+                title="Glisser sur le canvas pour ajouter une VM"
+            >
+                <svg viewBox="0 0 40 40" width="40" height="40">
+                    <rect x="5" y="3" width="30" height="22" rx="2" fill="#4a9eff" stroke="#7ab8ff" stroke-width="1.5"/>
+                    <rect x="10" y="7" width="20" height="14" rx="1" fill="#1a202c"/>
+                    <rect x="15" y="27" width="10" height="3" fill="#4a9eff"/>
+                    <rect x="12" y="30" width="16" height="2" rx="1" fill="#4a9eff"/>
+                </svg>
+                <span>+ VM</span>
+            </div>
+            <button id="btn-remove-vm" class="btn btn-small btn-danger" title="Retirer la derniere VM">- VM</button>
+        </aside>
+
+        <!-- Canvas SVG central -->
+        <div id="canvas-container">
+            <svg id="topology-canvas" xmlns="http://www.w3.org/2000/svg">
+                <!-- Le contenu est genere par topology.js -->
+            </svg>
+            <div id="canvas-hint">Glissez des VMs depuis la palette</div>
+        </div>
+
+        <!-- Sidebar configuration -->
+        <aside id="sidebar">
+            <h3>Configuration</h3>
+
+            <!-- Backend -->
+            <fieldset>
+                <legend>Backend</legend>
+                <label><input type="radio" name="backend" value="fwcfg"> Alpine (fw_cfg)</label>
+                <label><input type="radio" name="backend" value="cloudinit" checked> Debian (cloud-init)</label>
+                <label><input type="radio" name="backend" value="vwifi"> Debian (vwifi)</label>
+            </fieldset>
+
+            <!-- Disque -->
+            <fieldset>
+                <legend>Image disque</legend>
+                <input type="text" id="disk-path" placeholder="/chemin/vers/image.qcow2" list="disk-list">
+                <datalist id="disk-list"></datalist>
+                <button id="btn-scan-disks" class="btn btn-small" title="Scanner les disques disponibles">Scanner</button>
+            </fieldset>
+
+            <!-- Options communes -->
+            <fieldset>
+                <legend>Options communes</legend>
+                <div class="form-row">
+                    <label for="opt-ram">RAM (MB)</label>
+                    <input type="number" id="opt-ram" value="1024" min="128" step="128">
+                </div>
+                <div class="form-row">
+                    <label for="opt-cpu">CPUs</label>
+                    <input type="number" id="opt-cpu" value="2" min="1" max="8">
+                </div>
+                <div class="form-row">
+                    <label for="opt-disk-mode">Mode disque</label>
+                    <select id="opt-disk-mode">
+                        <option value="snapshot" selected>snapshot (volatile)</option>
+                        <option value="overlay">overlay (delta qcow2)</option>
+                        <option value="copy">copy (copie complete)</option>
+                        <option value="shared">shared (dangereux)</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label for="opt-vde-net">Reseau VDE</label>
+                    <input type="text" id="opt-vde-net" value="192.168.100.0/24">
+                </div>
+                <div class="form-row">
+                    <label for="opt-base-ip">IP de base</label>
+                    <input type="number" id="opt-base-ip" value="10" min="1" max="254">
+                </div>
+                <div class="form-row">
+                    <label for="opt-base-ssh">Port SSH base</label>
+                    <input type="number" id="opt-base-ssh" value="2222" min="1024" max="65535">
+                </div>
+                <div class="form-row">
+                    <label for="opt-pkg-list">Fichier paquets</label>
+                    <input type="text" id="opt-pkg-list" placeholder="/chemin/vers/packages">
+                </div>
+                <div class="form-row form-row-checkbox">
+                    <label><input type="checkbox" id="opt-no-nat"> Pas de NAT (VDE seul)</label>
+                </div>
+                <div class="form-row form-row-checkbox">
+                    <label><input type="checkbox" id="opt-hub"> Mode HUB</label>
+                </div>
+                <div class="form-row form-row-checkbox">
+                    <label><input type="checkbox" id="opt-mirror"> Port mirroring (Wireshark)</label>
+                </div>
+            </fieldset>
+
+            <!-- Options specifiques fwcfg -->
+            <fieldset id="opts-fwcfg" class="backend-opts" style="display:none;">
+                <legend>Options fw_cfg</legend>
+                <div class="form-row">
+                    <label for="opt-net-script">Script reseau</label>
+                    <input type="text" id="opt-net-script" placeholder="/tmp/setup-net.sh">
+                </div>
+            </fieldset>
+
+            <!-- Options specifiques cloudinit -->
+            <fieldset id="opts-cloudinit" class="backend-opts">
+                <legend>Options cloud-init</legend>
+                <div class="form-row">
+                    <label for="opt-password">Mot de passe</label>
+                    <input type="text" id="opt-password" placeholder="(optionnel)">
+                </div>
+                <div class="form-row">
+                    <label for="opt-ssh-key">Cle SSH pub</label>
+                    <input type="text" id="opt-ssh-key" placeholder="~/.ssh/id_ed25519.pub">
+                </div>
+                <div class="form-row">
+                    <label for="opt-seeds-dir">Repertoire seeds</label>
+                    <input type="text" id="opt-seeds-dir" placeholder="/tmp/vde/seeds">
+                </div>
+            </fieldset>
+
+            <!-- Options specifiques vwifi -->
+            <fieldset id="opts-vwifi" class="backend-opts" style="display:none;">
+                <legend>Options vwifi</legend>
+                <div class="form-row">
+                    <label for="opt-password-vwifi">Mot de passe</label>
+                    <input type="text" id="opt-password-vwifi" placeholder="(optionnel)">
+                </div>
+                <div class="form-row">
+                    <label for="opt-ssh-key-vwifi">Cle SSH pub</label>
+                    <input type="text" id="opt-ssh-key-vwifi" placeholder="~/.ssh/id_ed25519.pub">
+                </div>
+                <div class="form-row">
+                    <label for="opt-seeds-dir-vwifi">Repertoire seeds</label>
+                    <input type="text" id="opt-seeds-dir-vwifi" placeholder="/tmp/vde/seeds">
+                </div>
+                <div class="form-row">
+                    <label for="opt-wlan-count">Interfaces WLAN</label>
+                    <input type="number" id="opt-wlan-count" value="1" min="1" max="4">
+                </div>
+            </fieldset>
+        </aside>
+    </div>
+
+    <!-- Footer : apercu CLI -->
+    <footer id="footer">
+        <div class="footer-label">Commande CLI :</div>
+        <pre id="cli-preview">./cloudinit.sh --count 2 image.qcow2</pre>
+    </footer>
+
+    <!-- Panel output -->
+    <div id="output-panel">
+        <div id="output-header" title="Cliquer pour replier/deplier">
+            <span>Sortie du script</span>
+            <button id="btn-toggle-output" class="btn btn-small">Replier</button>
+        </div>
+        <pre id="output-content"></pre>
+    </div>
+
+    <script src="/static/js/topology.js"></script>
+    <script src="/static/js/config.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
