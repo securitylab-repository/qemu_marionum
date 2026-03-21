@@ -301,7 +301,13 @@ def api_vm_launch_single():
 
 @app.route("/api/mirror/start", methods=["POST"])
 def api_mirror_start():
-    """Active le port mirroring (vdecapture + FIFO) pour Wireshark."""
+    """Active le port mirroring (vdecapture + FIFO) pour Wireshark.
+
+    vdecapture bloque en ecriture sur la FIFO tant que Wireshark ne lit pas.
+    Le port n'apparait dans le switch qu'apres le lancement de Wireshark.
+    On lance donc un thread qui poll port/print et active le HUB des que
+    le port vdecapture est visible.
+    """
     vde_socket = "/tmp/vde/switch"
     mgmt_socket = "/tmp/vde/mgmt"
     fifo_path = "/tmp/vde/vde.pipe"
@@ -330,18 +336,15 @@ def api_mirror_start():
         if not os.path.exists(fifo_path):
             os.mkfifo(fifo_path)
 
-        # Lancer vdecapture en arriere-plan
+        # Lancer vdecapture en arriere-plan (bloque sur FIFO jusqu'a Wireshark)
         subprocess.Popen(
             ["vdecapture", vde_socket, "-", fifo_path],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
 
-        # Attendre un peu que vdecapture se connecte
-        time.sleep(0.5)
-
-        # Decouvrir le port de vdecapture via le socket management
-        capture_port = None
+        # Lister les ports connus AVANT que Wireshark ne se connecte
+        known_ports = set()
         if os.path.exists(mgmt_socket):
             try:
                 result = subprocess.run(
@@ -349,44 +352,70 @@ def api_mirror_start():
                     input="port/print\n",
                     capture_output=True, text=True, timeout=5,
                 )
-                # Chercher la derniere ligne avec un port (vdecapture)
                 for line in result.stdout.strip().splitlines():
-                    line = line.strip()
-                    # Format: "Port NNNN ..."
-                    if line.startswith("Port ") or line.startswith("port "):
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            try:
-                                capture_port = int(parts[1].rstrip(":"))
-                            except ValueError:
-                                pass
-            except Exception:
-                pass
-
-        # Activer le mode HUB sur le port de vdecapture
-        if capture_port is not None and os.path.exists(mgmt_socket):
-            try:
-                subprocess.run(
-                    ["socat", "-", f"UNIX-CONNECT:{mgmt_socket}"],
-                    input=f"port/sethub {capture_port} 1\n",
-                    capture_output=True, text=True, timeout=5,
-                )
+                    parts = line.strip().split()
+                    if len(parts) >= 2 and parts[0].lower().startswith("port"):
+                        try:
+                            known_ports.add(int(parts[1].rstrip(":")))
+                        except ValueError:
+                            pass
             except Exception:
                 pass
 
         with lab_state["lock"]:
-            lab_state["output_lines"].append("[MIRROR] Port mirroring active.")
-            lab_state["output_lines"].append(f"[MIRROR] FIFO : {fifo_path}")
-            if capture_port is not None:
-                lab_state["output_lines"].append(f"[MIRROR] Port vdecapture : {capture_port} (HUB active)")
+            lab_state["output_lines"].append("[MIRROR] vdecapture lance, en attente de Wireshark...")
             lab_state["output_lines"].append(f"[MIRROR] Lancez Wireshark avec :")
             lab_state["output_lines"].append(f"  sudo wireshark -k -i {fifo_path}")
+
+        # Thread qui attend que le port vdecapture apparaisse puis active HUB
+        def wait_and_sethub():
+            for _ in range(30):  # max 60s (30 x 2s)
+                time.sleep(2)
+                if not os.path.exists(mgmt_socket):
+                    continue
+                try:
+                    result = subprocess.run(
+                        ["socat", "-", f"UNIX-CONNECT:{mgmt_socket}"],
+                        input="port/print\n",
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    new_port = None
+                    for line in result.stdout.strip().splitlines():
+                        parts = line.strip().split()
+                        if len(parts) >= 2 and parts[0].lower().startswith("port"):
+                            try:
+                                p = int(parts[1].rstrip(":"))
+                                if p not in known_ports:
+                                    new_port = p
+                            except ValueError:
+                                pass
+                    if new_port is not None:
+                        # Activer HUB sur le nouveau port
+                        subprocess.run(
+                            ["socat", "-", f"UNIX-CONNECT:{mgmt_socket}"],
+                            input=f"port/sethub {new_port} 1\n",
+                            capture_output=True, text=True, timeout=5,
+                        )
+                        with lab_state["lock"]:
+                            lab_state["output_lines"].append(
+                                f"[MIRROR] Wireshark connecte — port {new_port} en mode HUB"
+                            )
+                        return
+                except Exception:
+                    pass
+            with lab_state["lock"]:
+                lab_state["output_lines"].append(
+                    "[MIRROR] Timeout : Wireshark non detecte apres 60s. "
+                    "Le HUB n'a pas ete active."
+                )
+
+        t = threading.Thread(target=wait_and_sethub, daemon=True)
+        t.start()
 
         return jsonify({
             "ok": True,
             "message": "Port mirroring active.",
             "wireshark_cmd": f"sudo wireshark -k -i {fifo_path}",
-            "capture_port": capture_port,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
