@@ -71,6 +71,7 @@
                 <div class="form-row">
                     <label for="vm-disk-path">Disque</label>
                     <input type="text" id="vm-disk-path" placeholder="(herite du global)" list="disk-list">
+                    <button class="btn-browse-small" data-target="vm-disk-path" title="Parcourir">...</button>
                 </div>
                 <div class="form-row">
                     <label for="vm-opt-ram">RAM (MB)</label>
@@ -109,7 +110,7 @@
                 <legend>Image disque</legend>
                 <input type="text" id="disk-path" placeholder="/chemin/vers/image.qcow2" list="disk-list">
                 <datalist id="disk-list"></datalist>
-                <button id="btn-scan-disks" class="btn btn-small" title="Scanner les disques disponibles">Scanner</button>
+                <button id="btn-scan-disks" class="btn btn-small" title="Parcourir le systeme de fichiers">Parcourir...</button>
             </fieldset>
 
             <!-- Options communes -->
@@ -224,11 +225,32 @@
         <pre id="output-content"></pre>
     </div>
 
+    <!-- Modal explorateur de fichiers -->
+    <div id="file-browser-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Selectionner une image disque</h3>
+                <button id="btn-close-browser" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-toolbar">
+                <button id="btn-browse-up" class="btn btn-small">Parent</button>
+                <span id="browse-current-path" class="browse-path"></span>
+            </div>
+            <div id="browse-discovered" class="browse-section" style="display: none;">
+                <div class="browse-section-title">Disques decouverts</div>
+                <div id="browse-discovered-list" class="browse-list"></div>
+            </div>
+            <div class="browse-section">
+                <div class="browse-section-title">Contenu du repertoire</div>
+                <div id="browse-entries" class="browse-list"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Menu contextuel VM -->
     <div id="vm-context-menu" class="context-menu" style="display: none;">
         <div class="context-menu-item" data-action="start">Demarrer VM</div>
         <div class="context-menu-item" data-action="stop">Arreter VM</div>
-        <div class="context-menu-item" data-action="reopen">Reouvrir terminal</div>
         <div class="context-menu-separator"></div>
         <div class="context-menu-item" data-action="select">Configurer VM</div>
     </div>

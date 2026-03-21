@@ -45,6 +45,32 @@ def api_disks():
     return jsonify(sorted(found))
 
 
+@app.route("/api/browse")
+def api_browse():
+    """Navigue dans le systeme de fichiers pour trouver des images disque."""
+    raw = request.args.get("path", os.path.expanduser("~"))
+    path = os.path.abspath(raw)
+    if not os.path.isdir(path):
+        path = os.path.dirname(path)
+
+    entries = []
+    try:
+        for name in sorted(os.listdir(path), key=str.lower):
+            if name.startswith("."):
+                continue
+            full = os.path.join(path, name)
+            if os.path.isdir(full):
+                entries.append({"name": name, "path": full, "type": "dir"})
+            elif name.lower().endswith((".qcow2", ".img", ".raw")):
+                size = os.path.getsize(full)
+                entries.append({"name": name, "path": full, "type": "disk", "size": size})
+    except PermissionError:
+        pass
+
+    parent = os.path.dirname(path) if path != "/" else None
+    return jsonify({"current": path, "parent": parent, "entries": entries})
+
+
 @app.route("/api/launch", methods=["POST"])
 def api_launch():
     """Lance le lab avec les parametres fournis."""

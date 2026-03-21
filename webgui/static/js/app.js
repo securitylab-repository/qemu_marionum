@@ -58,7 +58,7 @@
         setupOutputToggle();
         setupDrag();
         setupContextMenu();
-        scanDisks();
+        setupFileBrowser();
 
         updateAll();
     });
@@ -304,12 +304,9 @@
             // Griser les items selon l'etat
             const startItem = menu.querySelector('[data-action="start"]');
             const stopItem = menu.querySelector('[data-action="stop"]');
-            const reopenItem = menu.querySelector('[data-action="reopen"]');
-
             // Desactiver par defaut
             startItem.setAttribute("data-disabled", "true");
             stopItem.setAttribute("data-disabled", "true");
-            reopenItem.setAttribute("data-disabled", "true");
 
             if (!state.labRunning) {
                 // Lab pas running : tout grise
@@ -326,14 +323,9 @@
                     if (data.running) {
                         stopItem.removeAttribute("data-disabled");
                         startItem.setAttribute("data-disabled", "true");
-                        reopenItem.setAttribute("data-disabled", "true");
                     } else {
                         startItem.removeAttribute("data-disabled");
                         stopItem.setAttribute("data-disabled", "true");
-                        // Reouvrir actif si les scripts existent (xterm ferme, VM morte)
-                        if (data.has_scripts) {
-                            reopenItem.removeAttribute("data-disabled");
-                        }
                     }
                 })
                 .catch(() => {});
@@ -372,22 +364,6 @@
                     });
             } else if (action === "start") {
                 startOrLaunchVM(vmNum, contextVmId);
-            } else if (action === "reopen") {
-                // Force kill puis redemarrer
-                fetch("/api/vm/stop", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ vm_num: vmNum }),
-                })
-                    .then(() => {
-                        // Petit delai pour que le process meure
-                        setTimeout(() => {
-                            startOrLaunchVM(vmNum, contextVmId);
-                        }, 500);
-                    })
-                    .catch(() => {
-                        startOrLaunchVM(vmNum, contextVmId);
-                    });
             }
         });
 
@@ -500,7 +476,6 @@
     function setupButtons() {
         btnLaunch.addEventListener("click", launchLab);
         btnStop.addEventListener("click", stopLab);
-        document.getElementById("btn-scan-disks").addEventListener("click", scanDisks);
     }
 
     // --- Output toggle ---
@@ -731,21 +706,151 @@
         }
     }
 
-    // --- Scan disks ---
+    // --- Explorateur de fichiers ---
 
-    async function scanDisks() {
-        try {
-            const resp = await fetch("/api/disks");
-            const disks = await resp.json();
-            const datalist = document.getElementById("disk-list");
-            datalist.innerHTML = "";
-            disks.forEach(path => {
-                const opt = document.createElement("option");
-                opt.value = path;
-                datalist.appendChild(opt);
-            });
-        } catch {
-            // Pas critique
+    let browseTargetInput = null;
+
+    function setupFileBrowser() {
+        const overlay = document.getElementById("file-browser-overlay");
+        const btnClose = document.getElementById("btn-close-browser");
+        const btnUp = document.getElementById("btn-browse-up");
+        const pathSpan = document.getElementById("browse-current-path");
+        const entriesDiv = document.getElementById("browse-entries");
+        const discoveredSection = document.getElementById("browse-discovered");
+        const discoveredList = document.getElementById("browse-discovered-list");
+
+        let currentPath = "";
+
+        // Ouvrir le browser
+        document.getElementById("btn-scan-disks").addEventListener("click", () => {
+            browseTargetInput = document.getElementById("disk-path");
+            openBrowser();
+        });
+
+        // Boutons "..." per-VM
+        document.addEventListener("click", (e) => {
+            const btn = e.target.closest(".btn-browse-small");
+            if (!btn) return;
+            const targetId = btn.getAttribute("data-target");
+            if (targetId) {
+                browseTargetInput = document.getElementById(targetId);
+                openBrowser();
+            }
+        });
+
+        function openBrowser() {
+            overlay.style.display = "flex";
+            // Charger les disques decouverts + naviguer dans le repertoire courant
+            loadDiscovered();
+            const startPath = browseTargetInput?.value?.trim();
+            if (startPath && startPath.includes("/")) {
+                const dir = startPath.substring(0, startPath.lastIndexOf("/")) || "/";
+                navigate(dir);
+            } else {
+                navigate("");
+            }
+        }
+
+        function closeBrowser() {
+            overlay.style.display = "none";
+        }
+
+        btnClose.addEventListener("click", closeBrowser);
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) closeBrowser();
+        });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && overlay.style.display !== "none") {
+                closeBrowser();
+            }
+        });
+
+        btnUp.addEventListener("click", () => {
+            if (currentPath && currentPath !== "/") {
+                const parent = currentPath.substring(0, currentPath.lastIndexOf("/")) || "/";
+                navigate(parent);
+            }
+        });
+
+        async function loadDiscovered() {
+            try {
+                const resp = await fetch("/api/disks");
+                const disks = await resp.json();
+                // Aussi remplir le datalist
+                const datalist = document.getElementById("disk-list");
+                datalist.innerHTML = "";
+                disks.forEach(path => {
+                    const opt = document.createElement("option");
+                    opt.value = path;
+                    datalist.appendChild(opt);
+                });
+
+                if (disks.length > 0) {
+                    discoveredSection.style.display = "";
+                    discoveredList.innerHTML = "";
+                    disks.forEach(diskPath => {
+                        const name = diskPath.split("/").pop();
+                        const dir = diskPath.substring(0, diskPath.lastIndexOf("/"));
+                        const entry = document.createElement("div");
+                        entry.className = "browse-entry browse-entry-disk";
+                        entry.innerHTML = `<span class="browse-entry-icon">\u{1F4BE}</span><span class="browse-entry-name" title="${diskPath}">${name}</span><span class="browse-entry-size">${dir}</span>`;
+                        entry.addEventListener("click", () => selectDisk(diskPath));
+                        discoveredList.appendChild(entry);
+                    });
+                } else {
+                    discoveredSection.style.display = "none";
+                }
+            } catch {
+                discoveredSection.style.display = "none";
+            }
+        }
+
+        async function navigate(path) {
+            try {
+                const resp = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+                const data = await resp.json();
+                currentPath = data.current;
+                pathSpan.textContent = currentPath;
+                pathSpan.title = currentPath;
+
+                entriesDiv.innerHTML = "";
+                if (data.entries.length === 0) {
+                    entriesDiv.innerHTML = '<div class="browse-empty">Aucun fichier disque dans ce repertoire</div>';
+                    return;
+                }
+
+                data.entries.forEach(e => {
+                    const entry = document.createElement("div");
+                    if (e.type === "dir") {
+                        entry.className = "browse-entry browse-entry-dir";
+                        entry.innerHTML = `<span class="browse-entry-icon">\u{1F4C1}</span><span class="browse-entry-name">${e.name}</span>`;
+                        entry.addEventListener("click", () => navigate(e.path));
+                    } else {
+                        const sizeStr = formatSize(e.size || 0);
+                        entry.className = "browse-entry browse-entry-disk";
+                        entry.innerHTML = `<span class="browse-entry-icon">\u{1F4BE}</span><span class="browse-entry-name">${e.name}</span><span class="browse-entry-size">${sizeStr}</span>`;
+                        entry.addEventListener("click", () => selectDisk(e.path));
+                    }
+                    entriesDiv.appendChild(entry);
+                });
+            } catch (err) {
+                entriesDiv.innerHTML = `<div class="browse-empty">Erreur : ${err.message}</div>`;
+            }
+        }
+
+        function selectDisk(path) {
+            if (browseTargetInput) {
+                browseTargetInput.value = path;
+                browseTargetInput.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+            closeBrowser();
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + " o";
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " Ko";
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " Mo";
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " Go";
         }
     }
 
