@@ -337,10 +337,11 @@ def api_mirror_start():
             os.mkfifo(fifo_path)
 
         # Lancer vdecapture en arriere-plan (bloque sur FIFO jusqu'a Wireshark)
+        # "-" = sortie stdout, "> fifo" = redirection shell vers la FIFO
+        # Le shell bloque sur l'ouverture de la FIFO tant que Wireshark ne lit pas
         subprocess.Popen(
-            ["vdecapture", vde_socket, "-", fifo_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            f'vdecapture "{vde_socket}" - > "{fifo_path}" 2>/dev/null',
+            shell=True,
         )
 
         # Lister les ports connus AVANT que Wireshark ne se connecte
