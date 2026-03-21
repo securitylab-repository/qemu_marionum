@@ -216,13 +216,16 @@ const Topology = (() => {
             gVM.appendChild(ipText);
 
             // Info per-VM (si config differente du global)
-            const hasOverride = vm.disk || vm.ram || vm.cpu || vm.diskMode;
+            const hasOverride = vm.disk || vm.ram || vm.cpu || vm.diskMode || vm.backend;
             if (hasOverride) {
                 const infoText = svgEl("text", {
                     x: pos.x, y: pos.y + 18,
                     class: "vm-info",
                 });
                 const infoParts = [];
+                if (vm.backend && vm.backend !== backend) {
+                    infoParts.push(vm.backend);
+                }
                 if (vm.disk) {
                     const name = vm.disk.split("/").pop();
                     infoParts.push(name.length > 12 ? name.substring(0, 12) + "..." : name);

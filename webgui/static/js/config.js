@@ -91,7 +91,22 @@ const Config = (() => {
         const ramInput = document.getElementById("vm-opt-ram");
         const cpuInput = document.getElementById("vm-opt-cpu");
         const diskModeSelect = document.getElementById("vm-opt-disk-mode");
+        const backendSelect = document.getElementById("vm-opt-backend");
 
+        if (backendSelect) {
+            backendSelect.value = vm.backend || "";
+            const globalBackend = document.querySelector('input[name="backend"]:checked')?.value || "cloudinit";
+            const globalLabel = BACKEND_CONFIG[globalBackend]?.label || globalBackend;
+            const globalOpt = backendSelect.querySelector('option[value=""]');
+            if (globalOpt) {
+                globalOpt.textContent = `(global: ${globalLabel})`;
+            }
+            // Masquer le select si le backend global est vwifi (pas d'override possible)
+            const backendRow = backendSelect.closest(".form-row");
+            if (backendRow) {
+                backendRow.style.display = (globalBackend === "vwifi") ? "none" : "";
+            }
+        }
         if (diskInput) {
             diskInput.value = vm.disk || "";
             diskInput.placeholder = globalDisk ? globalDisk : "(herite du global)";
@@ -118,7 +133,7 @@ const Config = (() => {
      * Verifie si une VM a une config differente du global.
      */
     function vmHasOverride(vm) {
-        return !!(vm.disk || vm.ram || vm.cpu || vm.diskMode);
+        return !!(vm.disk || vm.ram || vm.cpu || vm.diskMode || vm.backend);
     }
 
     /**
@@ -186,6 +201,7 @@ const Config = (() => {
                 ram: vm.ram || null,
                 cpu: vm.cpu || null,
                 disk_mode: vm.diskMode || null,
+                backend: vm.backend || null,
             }));
         }
 
@@ -210,10 +226,14 @@ const Config = (() => {
         // Mode per-VM : affichage multi-ligne
         if (params.vms) {
             const lines = ["# Mode per-VM — script genere dans /tmp/vde/webgui-launch.sh"];
-            lines.push(`# Backend: ${cfg.label} | ${params.count} VMs`);
+            lines.push(`# Backend global: ${cfg.label} | ${params.count} VMs`);
             lines.push("");
             params.vms.forEach((vm, i) => {
                 const parts = [`VM${vm.id}:`];
+                if (vm.backend && vm.backend !== backend) {
+                    const vmCfg = BACKEND_CONFIG[vm.backend];
+                    parts.push(`backend=${vmCfg ? vmCfg.label : vm.backend}`);
+                }
                 parts.push(`disk=${vm.disk || params.disk || "<image>"}`);
                 parts.push(`ram=${vm.ram || params.ram || "default"}`);
                 parts.push(`cpu=${vm.cpu || params.cpu || "default"}`);

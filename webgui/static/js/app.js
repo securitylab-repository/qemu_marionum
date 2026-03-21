@@ -13,8 +13,8 @@
     // Etat de l'application
     const state = {
         vms: [
-            { id: 1, disk: "", ram: null, cpu: null, diskMode: null },
-            { id: 2, disk: "", ram: null, cpu: null, diskMode: null },
+            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null },
+            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null },
         ],
         selectedVmId: null,
         nextVmId: 3,
@@ -167,6 +167,7 @@
             "vm-opt-ram": "ram",
             "vm-opt-cpu": "cpu",
             "vm-opt-disk-mode": "diskMode",
+            "vm-opt-backend": "backend",
         };
 
         Object.entries(vmFields).forEach(([id, prop]) => {
@@ -245,6 +246,7 @@
             ram: null,
             cpu: null,
             diskMode: null,
+            backend: null,
         };
         state.vms.push(vm);
         selectVM(vm.id);

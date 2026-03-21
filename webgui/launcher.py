@@ -42,11 +42,16 @@ def generate_launcher(params):
     lines.append(_preamble(g))
     lines.append(_vde_setup_block(g))
 
-    if backend == "fwcfg":
+    # Generer le script reseau fwcfg si au moins une VM utilise fwcfg
+    any_fwcfg = backend == "fwcfg" or any(
+        vm.get("backend") == "fwcfg" for vm in vms
+    )
+    if any_fwcfg:
         lines.append(_fwcfg_net_script_block(g))
 
     for i, vm in enumerate(vms):
         vm_num = i + 1
+        vm_backend = vm.get("backend") or backend
         resolved = {
             "disk": vm.get("disk") or g["disk"],
             "ram": vm.get("ram") or g["ram"],
@@ -56,12 +61,12 @@ def generate_launcher(params):
         lines.append(f'\nsection "VM{vm_num}"')
         lines.append(_disk_prep_block(vm_num, resolved))
 
-        if backend in ("cloudinit", "vwifi"):
+        if vm_backend in ("cloudinit", "vwifi"):
             lines.append(_cloudinit_seed_block(vm_num, resolved, g))
-        elif backend == "fwcfg":
+        elif vm_backend == "fwcfg":
             lines.append(_fwcfg_config_block(vm_num, g))
 
-        lines.append(_qemu_launch_block(vm_num, resolved, g, backend))
+        lines.append(_qemu_launch_block(vm_num, resolved, g, vm_backend))
 
     lines.append(_summary_block(vms, g))
 

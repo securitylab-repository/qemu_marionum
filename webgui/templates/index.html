@@ -61,6 +61,14 @@
                     <button id="btn-global-config" title="Revenir a la config globale">Config globale</button>
                 </div>
                 <div class="form-row">
+                    <label for="vm-opt-backend">Backend</label>
+                    <select id="vm-opt-backend">
+                        <option value="">(global)</option>
+                        <option value="fwcfg">Alpine (fw_cfg)</option>
+                        <option value="cloudinit">Debian (cloud-init)</option>
+                    </select>
+                </div>
+                <div class="form-row">
                     <label for="vm-disk-path">Disque</label>
                     <input type="text" id="vm-disk-path" placeholder="(herite du global)" list="disk-list">
                 </div>
