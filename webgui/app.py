@@ -7,7 +7,7 @@ import threading
 import time
 import glob as globmod
 from flask import Flask, render_template, jsonify, request
-from launcher import generate_launcher
+from launcher import generate_launcher, generate_single_vm_script
 
 app = Flask(__name__)
 
@@ -216,6 +216,59 @@ def api_vm_start():
             cwd=PROJECT_ROOT,
         )
         return jsonify({"ok": True, "message": f"VM{vm_num} demarree."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/vm/launch-single", methods=["POST"])
+def api_vm_launch_single():
+    """Genere les scripts et lance une VM individuelle (ajout dynamique)."""
+    params = request.get_json(force=True) if request.data else {}
+    vm_num = params.get("vm_num")
+    global_params = params.get("global_params", {})
+    vm_config = params.get("vm_config", {})
+
+    if not vm_num:
+        return jsonify({"error": "vm_num requis."}), 400
+    if not global_params.get("disk") and not vm_config.get("disk"):
+        return jsonify({"error": "Aucune image disque specifiee."}), 400
+
+    # Verifier que le switch VDE tourne
+    if not os.path.exists("/tmp/vde/switch/ctl"):
+        return jsonify({"error": "Le switch VDE n'est pas actif. Lancez le lab d'abord."}), 400
+
+    # Verifier si deja running
+    cmd_script = f"/tmp/vde/vm{vm_num}-cmd.sh"
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", cmd_script],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return jsonify({"error": f"VM{vm_num} est deja en cours d'execution."}), 409
+    except Exception:
+        pass
+
+    try:
+        script_path = generate_single_vm_script(global_params, vm_config, vm_num)
+        proc = subprocess.Popen(
+            ["bash", script_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=PROJECT_ROOT,
+        )
+        # Lire la sortie dans un thread
+        def read_output():
+            for line in proc.stdout:
+                with lab_state["lock"]:
+                    lab_state["output_lines"].append(line.rstrip("\n"))
+            proc.wait()
+
+        t = threading.Thread(target=read_output, daemon=True)
+        t.start()
+
+        return jsonify({"ok": True, "message": f"VM{vm_num} en cours de lancement..."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

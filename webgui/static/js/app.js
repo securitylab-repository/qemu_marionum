@@ -13,8 +13,8 @@
     // Etat de l'application
     const state = {
         vms: [
-            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null, x: null, y: null },
-            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null, x: null, y: null },
+            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, x: null, y: null },
+            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, x: null, y: null },
         ],
         selectedVmId: null,
         nextVmId: 3,
@@ -224,6 +224,65 @@
         });
     }
 
+    // --- Helpers VM start/launch ---
+
+    function startOrLaunchVM(vmNum, vmId) {
+        // Essayer de demarrer via scripts existants, sinon generer via launch-single
+        fetch("/api/vm/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ vm_num: vmNum }),
+        })
+            .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
+            .then(({ ok, status, data }) => {
+                if (ok) {
+                    outputContent.textContent += `[VM${vmNum}] ${data.message}\n`;
+                    outputContent.scrollTop = outputContent.scrollHeight;
+                } else if (status === 404) {
+                    // Pas de scripts : generer et lancer
+                    launchSingleVM(vmNum, vmId);
+                } else {
+                    outputContent.textContent += `[VM${vmNum}] ${data.error || data.message || "Erreur"}\n`;
+                    outputContent.scrollTop = outputContent.scrollHeight;
+                }
+            })
+            .catch(err => {
+                outputContent.textContent += `[ERREUR] ${err.message}\n`;
+            });
+    }
+
+    function launchSingleVM(vmNum, vmId) {
+        const globalParams = Config.gatherFormParams(state.vms);
+        const vm = state.vms.find(v => v.id === vmId);
+        const vmConfig = vm ? {
+            disk: vm.disk || null,
+            ram: vm.ram || null,
+            cpu: vm.cpu || null,
+            disk_mode: vm.diskMode || null,
+            backend: vm.backend || null,
+            pkg_list: vm.pkgList || null,
+        } : {};
+
+        fetch("/api/vm/launch-single", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                vm_num: vmNum,
+                global_params: globalParams,
+                vm_config: vmConfig,
+            }),
+        })
+            .then(r => r.json())
+            .then(data => {
+                const msg = data.message || data.error || "OK";
+                outputContent.textContent += `[VM${vmNum}] ${msg}\n`;
+                outputContent.scrollTop = outputContent.scrollHeight;
+            })
+            .catch(err => {
+                outputContent.textContent += `[ERREUR] ${err.message}\n`;
+            });
+    }
+
     // --- Menu contextuel VM ---
 
     function setupContextMenu() {
@@ -245,10 +304,12 @@
             // Griser les items selon l'etat
             const startItem = menu.querySelector('[data-action="start"]');
             const stopItem = menu.querySelector('[data-action="stop"]');
+            const reopenItem = menu.querySelector('[data-action="reopen"]');
 
             // Desactiver par defaut
             startItem.setAttribute("data-disabled", "true");
             stopItem.setAttribute("data-disabled", "true");
+            reopenItem.setAttribute("data-disabled", "true");
 
             if (!state.labRunning) {
                 // Lab pas running : tout grise
@@ -262,16 +323,17 @@
             fetch(`/api/vm/status/${vmNum}`)
                 .then(r => r.json())
                 .then(data => {
-                    if (!data.has_scripts) {
-                        // Pas de scripts : tout grise
-                        return;
-                    }
                     if (data.running) {
                         stopItem.removeAttribute("data-disabled");
                         startItem.setAttribute("data-disabled", "true");
+                        reopenItem.setAttribute("data-disabled", "true");
                     } else {
                         startItem.removeAttribute("data-disabled");
                         stopItem.setAttribute("data-disabled", "true");
+                        // Reouvrir actif si les scripts existent (xterm ferme, VM morte)
+                        if (data.has_scripts) {
+                            reopenItem.removeAttribute("data-disabled");
+                        }
                     }
                 })
                 .catch(() => {});
@@ -309,19 +371,22 @@
                         outputContent.textContent += `[ERREUR] ${err.message}\n`;
                     });
             } else if (action === "start") {
-                fetch("/api/vm/start", {
+                startOrLaunchVM(vmNum, contextVmId);
+            } else if (action === "reopen") {
+                // Force kill puis redemarrer
+                fetch("/api/vm/stop", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ vm_num: vmNum }),
                 })
-                    .then(r => r.json())
-                    .then(data => {
-                        const msg = data.message || data.error || "OK";
-                        outputContent.textContent += `[VM${vmNum}] ${msg}\n`;
-                        outputContent.scrollTop = outputContent.scrollHeight;
+                    .then(() => {
+                        // Petit delai pour que le process meure
+                        setTimeout(() => {
+                            startOrLaunchVM(vmNum, contextVmId);
+                        }, 500);
                     })
-                    .catch(err => {
-                        outputContent.textContent += `[ERREUR] ${err.message}\n`;
+                    .catch(() => {
+                        startOrLaunchVM(vmNum, contextVmId);
                     });
             }
         });
@@ -387,6 +452,7 @@
             "vm-opt-cpu": "cpu",
             "vm-opt-disk-mode": "diskMode",
             "vm-opt-backend": "backend",
+            "vm-opt-pkg-list": "pkgList",
         };
 
         Object.entries(vmFields).forEach(([id, prop]) => {
@@ -397,7 +463,7 @@
                 const vm = state.vms.find(v => v.id === state.selectedVmId);
                 if (!vm) return;
 
-                if (prop === "disk" || prop === "diskMode") {
+                if (prop === "disk" || prop === "diskMode" || prop === "pkgList") {
                     vm[prop] = el.value.trim() || null;
                 } else {
                     const num = parseInt(el.value, 10);
@@ -443,6 +509,7 @@
         const panel = document.getElementById("output-panel");
         const btn = document.getElementById("btn-toggle-output");
         const header = document.getElementById("output-header");
+        const resizeHandle = document.getElementById("output-resize-handle");
 
         function toggle() {
             panel.classList.toggle("collapsed");
@@ -454,6 +521,29 @@
             toggle();
         });
         header.addEventListener("click", toggle);
+
+        // Resize par drag
+        let resizing = false;
+        let startY = 0;
+        let startH = 0;
+
+        resizeHandle.addEventListener("mousedown", (e) => {
+            if (panel.classList.contains("collapsed")) return;
+            resizing = true;
+            startY = e.clientY;
+            startH = panel.offsetHeight;
+            e.preventDefault();
+        });
+
+        document.addEventListener("mousemove", (e) => {
+            if (!resizing) return;
+            const newH = Math.max(60, Math.min(window.innerHeight * 0.7, startH - (e.clientY - startY)));
+            panel.style.height = newH + "px";
+        });
+
+        document.addEventListener("mouseup", () => {
+            resizing = false;
+        });
     }
 
     // --- VM management ---
@@ -466,6 +556,7 @@
             cpu: null,
             diskMode: null,
             backend: null,
+            pkgList: null,
             x: null,
             y: null,
         };

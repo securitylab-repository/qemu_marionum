@@ -58,13 +58,17 @@ def generate_launcher(params):
             "cpu": vm.get("cpu") or g["cpu"],
             "disk_mode": vm.get("disk_mode") or g["disk_mode"],
         }
+        # Per-VM globals override pour le seed
+        vm_g = dict(g)
+        if vm.get("pkg_list"):
+            vm_g["pkg_list"] = vm["pkg_list"]
         lines.append(f'\nsection "VM{vm_num}"')
         lines.append(_disk_prep_block(vm_num, resolved))
 
         if vm_backend in ("cloudinit", "vwifi"):
-            lines.append(_cloudinit_seed_block(vm_num, resolved, g))
+            lines.append(_cloudinit_seed_block(vm_num, resolved, vm_g))
         elif vm_backend == "fwcfg":
-            lines.append(_fwcfg_config_block(vm_num, g))
+            lines.append(_fwcfg_config_block(vm_num, vm_g))
 
         lines.append(_qemu_launch_block(vm_num, resolved, g, vm_backend))
 
@@ -78,6 +82,73 @@ def generate_launcher(params):
     os.chmod(LAUNCH_SCRIPT, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
 
     return ["bash", LAUNCH_SCRIPT]
+
+
+def generate_single_vm_script(params, vm_config, vm_num):
+    """Genere les scripts pour une seule VM (ajout dynamique au lab running).
+
+    Cree vmN-cmd.sh, vmN-xterm.sh et un script setup qui prepare le disque
+    et le seed, puis lance la VM.
+    Retourne le chemin du script setup.
+    """
+    backend = params.get("backend", "cloudinit")
+    g = {
+        "disk": params.get("disk", ""),
+        "ram": params.get("ram", 1024 if backend != "fwcfg" else 512),
+        "cpu": params.get("cpu", 2),
+        "disk_mode": params.get("disk_mode", "snapshot"),
+        "vde_net": params.get("vde_net", "192.168.100.0/24"),
+        "base_ip": params.get("base_ip", 10),
+        "base_ssh": params.get("base_ssh", 2222),
+        "no_nat": params.get("no_nat", False),
+        "hub": params.get("hub", False),
+        "mirror": params.get("mirror", False),
+        "pkg_list": params.get("pkg_list", ""),
+        "password": params.get("password", ""),
+        "ssh_key": params.get("ssh_key", ""),
+        "seeds_dir": params.get("seeds_dir", "/tmp/vde/seeds"),
+        "net_script": params.get("net_script", ""),
+    }
+
+    vm_backend = vm_config.get("backend") or backend
+    resolved = {
+        "disk": vm_config.get("disk") or g["disk"],
+        "ram": vm_config.get("ram") or g["ram"],
+        "cpu": vm_config.get("cpu") or g["cpu"],
+        "disk_mode": vm_config.get("disk_mode") or g["disk_mode"],
+    }
+    vm_g = dict(g)
+    if vm_config.get("pkg_list"):
+        vm_g["pkg_list"] = vm_config["pkg_list"]
+
+    lines = []
+    lines.append("#!/bin/bash")
+    lines.append("set -e")
+    lines.append("")
+    lines.append("GREEN='\\033[0;32m'")
+    lines.append("NC='\\033[0m'")
+    lines.append("info() { echo -e \"${GREEN}[INFO]${NC} $1\"; }")
+    lines.append(f'SEEDS_DIR="{g["seeds_dir"]}"')
+    lines.append(f'mkdir -p "$SEEDS_DIR"')
+    lines.append("")
+    lines.append(_disk_prep_block(vm_num, resolved))
+
+    if vm_backend in ("cloudinit", "vwifi"):
+        lines.append(_cloudinit_seed_block(vm_num, resolved, vm_g))
+    elif vm_backend == "fwcfg":
+        lines.append(_fwcfg_config_block(vm_num, vm_g))
+
+    lines.append(_qemu_launch_block(vm_num, resolved, vm_g, vm_backend))
+
+    script_content = "\n".join(lines) + "\n"
+    script_path = f"/tmp/vde/vm{vm_num}-setup.sh"
+
+    os.makedirs("/tmp/vde", exist_ok=True)
+    with open(script_path, "w") as f:
+        f.write(script_content)
+    os.chmod(script_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+
+    return script_path
 
 
 def _preamble(g):

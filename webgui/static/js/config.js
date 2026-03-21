@@ -127,13 +127,20 @@ const Config = (() => {
                 globalOpt.textContent = `(global: ${globalDiskMode})`;
             }
         }
+
+        const pkgListInput = document.getElementById("vm-opt-pkg-list");
+        if (pkgListInput) {
+            const globalPkgList = document.getElementById("opt-pkg-list")?.value?.trim() || "";
+            pkgListInput.value = vm.pkgList || "";
+            pkgListInput.placeholder = globalPkgList ? globalPkgList : "(herite du global)";
+        }
     }
 
     /**
      * Verifie si une VM a une config differente du global.
      */
     function vmHasOverride(vm) {
-        return !!(vm.disk || vm.ram || vm.cpu || vm.diskMode || vm.backend);
+        return !!(vm.disk || vm.ram || vm.cpu || vm.diskMode || vm.backend || vm.pkgList);
     }
 
     /**
@@ -202,6 +209,7 @@ const Config = (() => {
                 cpu: vm.cpu || null,
                 disk_mode: vm.diskMode || null,
                 backend: vm.backend || null,
+                pkg_list: vm.pkgList || null,
             }));
         }
 

@@ -90,6 +90,10 @@
                         <option value="shared">shared (dangereux)</option>
                     </select>
                 </div>
+                <div class="form-row">
+                    <label for="vm-opt-pkg-list">Paquets</label>
+                    <input type="text" id="vm-opt-pkg-list" placeholder="(herite du global)">
+                </div>
             </div>
 
             <!-- Backend -->
@@ -169,7 +173,7 @@
                 <legend>Options cloud-init</legend>
                 <div class="form-row">
                     <label for="opt-password">Mot de passe</label>
-                    <input type="text" id="opt-password" placeholder="(optionnel)">
+                    <input type="text" id="opt-password" value="debian">
                 </div>
                 <div class="form-row">
                     <label for="opt-ssh-key">Cle SSH pub</label>
@@ -186,7 +190,7 @@
                 <legend>Options vwifi</legend>
                 <div class="form-row">
                     <label for="opt-password-vwifi">Mot de passe</label>
-                    <input type="text" id="opt-password-vwifi" placeholder="(optionnel)">
+                    <input type="text" id="opt-password-vwifi" value="debian">
                 </div>
                 <div class="form-row">
                     <label for="opt-ssh-key-vwifi">Cle SSH pub</label>
@@ -212,6 +216,7 @@
 
     <!-- Panel output -->
     <div id="output-panel">
+        <div id="output-resize-handle"></div>
         <div id="output-header" title="Cliquer pour replier/deplier">
             <span>Sortie du script</span>
             <button id="btn-toggle-output" class="btn btn-small">Replier</button>
@@ -223,6 +228,7 @@
     <div id="vm-context-menu" class="context-menu" style="display: none;">
         <div class="context-menu-item" data-action="start">Demarrer VM</div>
         <div class="context-menu-item" data-action="stop">Arreter VM</div>
+        <div class="context-menu-item" data-action="reopen">Reouvrir terminal</div>
         <div class="context-menu-separator"></div>
         <div class="context-menu-item" data-action="select">Configurer VM</div>
     </div>

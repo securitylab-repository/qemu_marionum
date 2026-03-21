@@ -540,7 +540,7 @@ fieldset label input[type="checkbox"] {
     border-top: 1px solid var(--border-color);
     padding: 6px 16px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     flex-shrink: 0;
 }
@@ -551,6 +551,7 @@ fieldset label input[type="checkbox"] {
     text-transform: uppercase;
     font-weight: 600;
     white-space: nowrap;
+    padding-top: 4px;
 }
 
 #cli-preview {
@@ -561,8 +562,10 @@ fieldset label input[type="checkbox"] {
     background: var(--bg-primary);
     padding: 6px 10px;
     border-radius: var(--radius);
-    overflow-x: auto;
-    white-space: nowrap;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 80px;
     margin: 0;
 }
 
@@ -571,13 +574,28 @@ fieldset label input[type="checkbox"] {
     background: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
     flex-shrink: 0;
-    max-height: 200px;
+    height: 200px;
     display: flex;
     flex-direction: column;
+    position: relative;
 }
 
 #output-panel.collapsed {
-    max-height: 32px;
+    height: 32px;
+}
+
+#output-resize-handle {
+    position: absolute;
+    top: -3px;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+    z-index: 10;
+}
+
+#output-panel.collapsed #output-resize-handle {
+    display: none;
 }
 
 #output-header {
