@@ -614,6 +614,28 @@ fieldset label input[type="checkbox"] {
     font-weight: 600;
 }
 
+.output-header-buttons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.btn-mirror {
+    background: #553c9a;
+    color: #d6bcfa;
+    border-color: #6b46c1;
+}
+
+.btn-mirror:hover:not(:disabled) {
+    background: #6b46c1;
+    color: #fff;
+}
+
+.btn-mirror:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 #output-content {
     flex: 1;
     overflow-y: auto;

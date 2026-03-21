@@ -58,6 +58,7 @@
         setupOutputToggle();
         setupDrag();
         setupContextMenu();
+        setupMirrorButton();
         setupFileBrowser();
 
         updateAll();
@@ -485,6 +486,7 @@
         const btn = document.getElementById("btn-toggle-output");
         const header = document.getElementById("output-header");
         const resizeHandle = document.getElementById("output-resize-handle");
+        const btnClear = document.getElementById("btn-clear-output");
 
         function toggle() {
             panel.classList.toggle("collapsed");
@@ -495,7 +497,18 @@
             e.stopPropagation();
             toggle();
         });
-        header.addEventListener("click", toggle);
+
+        btnClear.addEventListener("click", (e) => {
+            e.stopPropagation();
+            outputContent.textContent = "";
+            state.outputOffset = 0;
+        });
+
+        header.addEventListener("click", (e) => {
+            // Ne pas toggle si on clique sur un bouton dans le header
+            if (e.target.closest(".output-header-buttons")) return;
+            toggle();
+        });
 
         // Resize par drag
         let resizing = false;
@@ -672,6 +685,9 @@
             statusBadge.classList.add("badge-idle");
             statusBadge.textContent = "Idle";
         }
+        if (window._updateMirrorButton) {
+            window._updateMirrorButton(status === "running");
+        }
     }
 
     // --- Polling output ---
@@ -704,6 +720,97 @@
         } catch {
             // Ignorer les erreurs reseau transitoires
         }
+    }
+
+    // --- Bouton Wireshark (mirror) ---
+
+    function setupMirrorButton() {
+        const btnMirror = document.getElementById("btn-mirror");
+        let mirrorActive = false;
+
+        btnMirror.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (mirrorActive) {
+                stopMirror();
+            } else {
+                startMirror();
+            }
+        });
+
+        function startMirror() {
+            btnMirror.disabled = true;
+            btnMirror.textContent = "...";
+            fetch("/api/mirror/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (ok && data.ok) {
+                        mirrorActive = true;
+                        btnMirror.disabled = false;
+                        btnMirror.textContent = "Stop mirror";
+                        btnMirror.title = "Arreter le port mirroring";
+                        // Afficher les instructions dans l'output
+                        if (!data.already_active) {
+                            outputContent.textContent += "[MIRROR] Port mirroring active.\n";
+                            outputContent.textContent += "[MIRROR] Lancez Wireshark avec :\n";
+                        }
+                        outputContent.textContent += `  sudo wireshark -k -i /tmp/vde/vde.pipe\n`;
+                        outputContent.scrollTop = outputContent.scrollHeight;
+                        // Deplier le panel output
+                        const panel = document.getElementById("output-panel");
+                        panel.classList.remove("collapsed");
+                        document.getElementById("btn-toggle-output").textContent = "Replier";
+                    } else {
+                        outputContent.textContent += `[MIRROR] Erreur : ${data.error || "echec"}\n`;
+                        btnMirror.disabled = false;
+                        btnMirror.textContent = "Wireshark";
+                    }
+                })
+                .catch(err => {
+                    outputContent.textContent += `[ERREUR] ${err.message}\n`;
+                    btnMirror.disabled = false;
+                    btnMirror.textContent = "Wireshark";
+                });
+        }
+
+        function stopMirror() {
+            btnMirror.disabled = true;
+            btnMirror.textContent = "...";
+            fetch("/api/mirror/stop", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            })
+                .then(r => r.json())
+                .then(data => {
+                    mirrorActive = false;
+                    btnMirror.disabled = false;
+                    btnMirror.textContent = "Wireshark";
+                    btnMirror.title = "Activer le port mirroring Wireshark";
+                    outputContent.textContent += "[MIRROR] Port mirroring arrete.\n";
+                    outputContent.scrollTop = outputContent.scrollHeight;
+                })
+                .catch(err => {
+                    outputContent.textContent += `[ERREUR] ${err.message}\n`;
+                    btnMirror.disabled = false;
+                    btnMirror.textContent = "Stop mirror";
+                });
+        }
+
+        // Activer/desactiver le bouton selon l'etat du lab
+        window._updateMirrorButton = function (labRunning) {
+            if (!labRunning) {
+                btnMirror.disabled = true;
+                if (mirrorActive) {
+                    mirrorActive = false;
+                    btnMirror.textContent = "Wireshark";
+                    btnMirror.title = "Activer le port mirroring Wireshark";
+                }
+            } else if (!mirrorActive) {
+                btnMirror.disabled = false;
+            }
+        };
     }
 
     // --- Explorateur de fichiers ---

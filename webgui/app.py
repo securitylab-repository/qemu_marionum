@@ -299,6 +299,119 @@ def api_vm_launch_single():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/mirror/start", methods=["POST"])
+def api_mirror_start():
+    """Active le port mirroring (vdecapture + FIFO) pour Wireshark."""
+    vde_socket = "/tmp/vde/switch"
+    mgmt_socket = "/tmp/vde/mgmt"
+    fifo_path = "/tmp/vde/vde.pipe"
+
+    if not os.path.exists(os.path.join(vde_socket, "ctl")):
+        return jsonify({"error": "Le switch VDE n'est pas actif."}), 400
+
+    # Verifier si deja actif
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "vdecapture"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return jsonify({
+                "ok": True,
+                "already_active": True,
+                "message": "Port mirroring deja actif.",
+                "wireshark_cmd": f"sudo wireshark -k -i {fifo_path}",
+            })
+    except Exception:
+        pass
+
+    try:
+        # Creer la FIFO si elle n'existe pas
+        if not os.path.exists(fifo_path):
+            os.mkfifo(fifo_path)
+
+        # Lancer vdecapture en arriere-plan
+        subprocess.Popen(
+            ["vdecapture", vde_socket, "-", fifo_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Attendre un peu que vdecapture se connecte
+        time.sleep(0.5)
+
+        # Decouvrir le port de vdecapture via le socket management
+        capture_port = None
+        if os.path.exists(mgmt_socket):
+            try:
+                result = subprocess.run(
+                    ["socat", "-", f"UNIX-CONNECT:{mgmt_socket}"],
+                    input="port/print\n",
+                    capture_output=True, text=True, timeout=5,
+                )
+                # Chercher la derniere ligne avec un port (vdecapture)
+                for line in result.stdout.strip().splitlines():
+                    line = line.strip()
+                    # Format: "Port NNNN ..."
+                    if line.startswith("Port ") or line.startswith("port "):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            try:
+                                capture_port = int(parts[1].rstrip(":"))
+                            except ValueError:
+                                pass
+            except Exception:
+                pass
+
+        # Activer le mode HUB sur le port de vdecapture
+        if capture_port is not None and os.path.exists(mgmt_socket):
+            try:
+                subprocess.run(
+                    ["socat", "-", f"UNIX-CONNECT:{mgmt_socket}"],
+                    input=f"port/sethub {capture_port} 1\n",
+                    capture_output=True, text=True, timeout=5,
+                )
+            except Exception:
+                pass
+
+        with lab_state["lock"]:
+            lab_state["output_lines"].append("[MIRROR] Port mirroring active.")
+            lab_state["output_lines"].append(f"[MIRROR] FIFO : {fifo_path}")
+            if capture_port is not None:
+                lab_state["output_lines"].append(f"[MIRROR] Port vdecapture : {capture_port} (HUB active)")
+            lab_state["output_lines"].append(f"[MIRROR] Lancez Wireshark avec :")
+            lab_state["output_lines"].append(f"  sudo wireshark -k -i {fifo_path}")
+
+        return jsonify({
+            "ok": True,
+            "message": "Port mirroring active.",
+            "wireshark_cmd": f"sudo wireshark -k -i {fifo_path}",
+            "capture_port": capture_port,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/mirror/stop", methods=["POST"])
+def api_mirror_stop():
+    """Arrete le port mirroring."""
+    fifo_path = "/tmp/vde/vde.pipe"
+    try:
+        subprocess.run(
+            ["pkill", "-f", "vdecapture"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if os.path.exists(fifo_path):
+            os.remove(fifo_path)
+
+        with lab_state["lock"]:
+            lab_state["output_lines"].append("[MIRROR] Port mirroring arrete.")
+
+        return jsonify({"ok": True, "message": "Port mirroring arrete."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/output")
 def api_output():
     """Retourne les nouvelles lignes de sortie depuis l'index donne."""

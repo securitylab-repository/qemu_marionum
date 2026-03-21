@@ -220,7 +220,11 @@
         <div id="output-resize-handle"></div>
         <div id="output-header" title="Cliquer pour replier/deplier">
             <span>Sortie du script</span>
-            <button id="btn-toggle-output" class="btn btn-small">Replier</button>
+            <div class="output-header-buttons">
+                <button id="btn-clear-output" class="btn btn-small" title="Effacer la sortie">Effacer</button>
+                <button id="btn-mirror" class="btn btn-small btn-mirror" disabled title="Activer le port mirroring Wireshark">Wireshark</button>
+                <button id="btn-toggle-output" class="btn btn-small">Replier</button>
+            </div>
         </div>
         <pre id="output-content"></pre>
     </div>
