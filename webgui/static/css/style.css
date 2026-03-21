@@ -248,7 +248,7 @@ body {
 
 /* Noeuds VM */
 .vm-node {
-    cursor: pointer;
+    cursor: grab;
 }
 
 .vm-node rect.vm-bg {
@@ -311,6 +311,10 @@ body {
     ry: 4;
     stroke: #68d391;
     stroke-width: 1.5;
+}
+
+.switch-node {
+    cursor: grab;
 }
 
 .switch-node text {
@@ -496,6 +500,11 @@ fieldset label input[type="checkbox"] {
     flex: 0 0 90px;
 }
 
+#vm-config-panel .form-row select,
+#vm-config-panel .form-row input {
+    min-width: 0;
+}
+
 /* VM info subtitle on SVG node */
 .vm-node text.vm-info {
     font-size: 8px;
@@ -602,6 +611,42 @@ fieldset label input[type="checkbox"] {
 
 #output-panel.collapsed #output-content {
     display: none;
+}
+
+/* ===== Context menu ===== */
+.context-menu {
+    position: fixed;
+    z-index: 1000;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    min-width: 160px;
+    padding: 4px 0;
+}
+
+.context-menu-item {
+    padding: 6px 16px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: background 0.1s;
+}
+
+.context-menu-item:hover {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.context-menu-item[data-disabled="true"] {
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
 }
 
 /* ===== Scrollbar ===== */

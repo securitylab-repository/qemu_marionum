@@ -142,6 +142,84 @@ def api_status():
         })
 
 
+@app.route("/api/vm/status/<int:vm_num>")
+def api_vm_status(vm_num):
+    """Verifie si une VM individuelle tourne."""
+    cmd_script = f"/tmp/vde/vm{vm_num}-cmd.sh"
+    xterm_script = f"/tmp/vde/vm{vm_num}-xterm.sh"
+    has_scripts = os.path.exists(cmd_script) and os.path.exists(xterm_script)
+    running = False
+    if has_scripts:
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", cmd_script],
+                capture_output=True, text=True, timeout=5,
+            )
+            running = result.returncode == 0
+        except Exception:
+            pass
+    return jsonify({"running": running, "has_scripts": has_scripts})
+
+
+@app.route("/api/vm/stop", methods=["POST"])
+def api_vm_stop():
+    """Arrete une VM individuelle."""
+    params = request.get_json(force=True) if request.data else {}
+    vm_num = params.get("vm_num")
+    if not vm_num:
+        return jsonify({"error": "vm_num requis."}), 400
+
+    cmd_script = f"/tmp/vde/vm{vm_num}-cmd.sh"
+    try:
+        result = subprocess.run(
+            ["pkill", "-f", cmd_script],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return jsonify({"ok": True, "message": f"VM{vm_num} arretee."})
+        else:
+            return jsonify({"ok": False, "message": f"VM{vm_num} non trouvee ou deja arretee."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/vm/start", methods=["POST"])
+def api_vm_start():
+    """Demarre (ou redemarre) une VM individuelle."""
+    params = request.get_json(force=True) if request.data else {}
+    vm_num = params.get("vm_num")
+    if not vm_num:
+        return jsonify({"error": "vm_num requis."}), 400
+
+    xterm_script = f"/tmp/vde/vm{vm_num}-xterm.sh"
+    cmd_script = f"/tmp/vde/vm{vm_num}-cmd.sh"
+
+    if not os.path.exists(xterm_script):
+        return jsonify({"error": f"Script {xterm_script} introuvable. Lancez le lab d'abord."}), 404
+
+    # Verifier si deja running
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", cmd_script],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return jsonify({"error": f"VM{vm_num} est deja en cours d'execution."}), 409
+    except Exception:
+        pass
+
+    try:
+        subprocess.Popen(
+            ["bash", xterm_script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=PROJECT_ROOT,
+        )
+        return jsonify({"ok": True, "message": f"VM{vm_num} demarree."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/output")
 def api_output():
     """Retourne les nouvelles lignes de sortie depuis l'index donne."""

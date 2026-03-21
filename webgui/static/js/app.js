@@ -13,8 +13,8 @@
     // Etat de l'application
     const state = {
         vms: [
-            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null },
-            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null },
+            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null, x: null, y: null },
+            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null, x: null, y: null },
         ],
         selectedVmId: null,
         nextVmId: 3,
@@ -26,6 +26,7 @@
         labRunning: false,
         outputOffset: 0,
         pollTimer: null,
+        switchPos: { x: null, y: null },
     };
 
     // Elements du DOM
@@ -35,6 +36,9 @@
     let btnLaunch;
     let btnStop;
     let statusBadge;
+
+    // Drag state
+    let justDragged = false;
 
     // --- Initialisation ---
 
@@ -52,6 +56,8 @@
         setupVmFormListeners();
         setupButtons();
         setupOutputToggle();
+        setupDrag();
+        setupContextMenu();
         scanDisks();
 
         updateAll();
@@ -100,6 +106,8 @@
 
         // Clic sur le canvas : selection VM ou bouton supprimer
         canvas.addEventListener("click", (e) => {
+            if (justDragged) return;
+
             // Bouton supprimer
             const delBtn = e.target.closest(".vm-delete");
             if (delBtn) {
@@ -118,6 +126,217 @@
 
             // Clic sur le fond → deselectionner
             deselectVM();
+        });
+    }
+
+    // --- Drag des noeuds SVG ---
+
+    function setupDrag() {
+        let dragging = null; // { type: "vm"|"switch", vmId?, startX, startY, origX, origY }
+        const DRAG_THRESHOLD = 5;
+        let dragStarted = false;
+
+        canvas.addEventListener("mousedown", (e) => {
+            if (e.button !== 0) return; // ignorer clic droit
+
+            const pt = Topology.screenToSVG(canvas, e.clientX, e.clientY);
+
+            // Ne pas initier un drag sur le bouton supprimer
+            if (e.target.closest(".vm-delete")) return;
+
+            const vmNode = e.target.closest(".vm-node");
+            if (vmNode) {
+                const vmId = parseInt(vmNode.getAttribute("data-vm-id"), 10);
+                const vm = state.vms.find(v => v.id === vmId);
+                if (!vm) return;
+                const layout = Topology.getLastLayout();
+                const idx = state.vms.indexOf(vm);
+                const pos = layout ? layout.vmPositions[idx] : null;
+                dragging = {
+                    type: "vm",
+                    vmId: vmId,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: pos ? pos.x : pt.x,
+                    origY: pos ? pos.y : pt.y,
+                };
+                dragStarted = false;
+                e.preventDefault();
+                return;
+            }
+
+            const switchNode = e.target.closest(".switch-node");
+            if (switchNode) {
+                const layout = Topology.getLastLayout();
+                const sc = layout ? layout.switchCenter : null;
+                dragging = {
+                    type: "switch",
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: sc ? sc.x : pt.x,
+                    origY: sc ? sc.y : pt.y,
+                };
+                dragStarted = false;
+                e.preventDefault();
+                return;
+            }
+        });
+
+        document.addEventListener("mousemove", (e) => {
+            if (!dragging) return;
+
+            const dx = e.clientX - dragging.startX;
+            const dy = e.clientY - dragging.startY;
+
+            if (!dragStarted) {
+                if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+                dragStarted = true;
+            }
+
+            // Convertir le delta ecran en delta SVG
+            const startSVG = Topology.screenToSVG(canvas, dragging.startX, dragging.startY);
+            const nowSVG = Topology.screenToSVG(canvas, e.clientX, e.clientY);
+            const svgDx = nowSVG.x - startSVG.x;
+            const svgDy = nowSVG.y - startSVG.y;
+
+            if (dragging.type === "vm") {
+                const vm = state.vms.find(v => v.id === dragging.vmId);
+                if (vm) {
+                    vm.x = dragging.origX + svgDx;
+                    vm.y = dragging.origY + svgDy;
+                    renderCanvas();
+                }
+            } else if (dragging.type === "switch") {
+                state.switchPos.x = dragging.origX + svgDx;
+                state.switchPos.y = dragging.origY + svgDy;
+                renderCanvas();
+            }
+        });
+
+        document.addEventListener("mouseup", (e) => {
+            if (!dragging) return;
+            if (dragStarted) {
+                justDragged = true;
+                setTimeout(() => { justDragged = false; }, 0);
+            }
+            dragging = null;
+            dragStarted = false;
+        });
+    }
+
+    // --- Menu contextuel VM ---
+
+    function setupContextMenu() {
+        const menu = document.getElementById("vm-context-menu");
+        let contextVmId = null;
+
+        canvas.addEventListener("contextmenu", (e) => {
+            const vmNode = e.target.closest(".vm-node");
+            if (!vmNode) return;
+
+            e.preventDefault();
+            contextVmId = parseInt(vmNode.getAttribute("data-vm-id"), 10);
+
+            // Positionner le menu
+            menu.style.left = e.clientX + "px";
+            menu.style.top = e.clientY + "px";
+            menu.style.display = "block";
+
+            // Griser les items selon l'etat
+            const startItem = menu.querySelector('[data-action="start"]');
+            const stopItem = menu.querySelector('[data-action="stop"]');
+
+            // Desactiver par defaut
+            startItem.setAttribute("data-disabled", "true");
+            stopItem.setAttribute("data-disabled", "true");
+
+            if (!state.labRunning) {
+                // Lab pas running : tout grise
+                return;
+            }
+
+            // Fetch status de la VM
+            const vmIdx = state.vms.findIndex(v => v.id === contextVmId);
+            const vmNum = vmIdx + 1;
+
+            fetch(`/api/vm/status/${vmNum}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.has_scripts) {
+                        // Pas de scripts : tout grise
+                        return;
+                    }
+                    if (data.running) {
+                        stopItem.removeAttribute("data-disabled");
+                        startItem.setAttribute("data-disabled", "true");
+                    } else {
+                        startItem.removeAttribute("data-disabled");
+                        stopItem.setAttribute("data-disabled", "true");
+                    }
+                })
+                .catch(() => {});
+        });
+
+        // Click sur un item du menu
+        menu.addEventListener("click", (e) => {
+            const item = e.target.closest(".context-menu-item");
+            if (!item || item.getAttribute("data-disabled") === "true") return;
+
+            const action = item.getAttribute("data-action");
+            menu.style.display = "none";
+
+            if (action === "select") {
+                selectVM(contextVmId);
+                return;
+            }
+
+            const vmIdx = state.vms.findIndex(v => v.id === contextVmId);
+            const vmNum = vmIdx + 1;
+
+            if (action === "stop") {
+                fetch("/api/vm/stop", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ vm_num: vmNum }),
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        const msg = data.message || data.error || "OK";
+                        outputContent.textContent += `[VM${vmNum}] ${msg}\n`;
+                        outputContent.scrollTop = outputContent.scrollHeight;
+                    })
+                    .catch(err => {
+                        outputContent.textContent += `[ERREUR] ${err.message}\n`;
+                    });
+            } else if (action === "start") {
+                fetch("/api/vm/start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ vm_num: vmNum }),
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        const msg = data.message || data.error || "OK";
+                        outputContent.textContent += `[VM${vmNum}] ${msg}\n`;
+                        outputContent.scrollTop = outputContent.scrollHeight;
+                    })
+                    .catch(err => {
+                        outputContent.textContent += `[ERREUR] ${err.message}\n`;
+                    });
+            }
+        });
+
+        // Fermer le menu : clic exterieur ou Escape
+        document.addEventListener("click", (e) => {
+            if (!menu.contains(e.target)) {
+                menu.style.display = "none";
+            }
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+                menu.style.display = "none";
+            }
         });
     }
 
@@ -247,6 +466,8 @@
             cpu: null,
             diskMode: null,
             backend: null,
+            x: null,
+            y: null,
         };
         state.vms.push(vm);
         selectVM(vm.id);

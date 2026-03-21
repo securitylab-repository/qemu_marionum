@@ -20,6 +20,30 @@ const Topology = (() => {
     const VWIFI_W = 110;
     const VWIFI_H = 44;
 
+    // Derniere disposition calculee (pour initialiser les drags)
+    let lastLayout = null;
+
+    /**
+     * Convertit des coordonnees ecran en coordonnees SVG.
+     */
+    function screenToSVG(svgEl, screenX, screenY) {
+        const ctm = svgEl.getScreenCTM();
+        if (!ctm) return { x: screenX, y: screenY };
+        const inv = ctm.inverse();
+        const pt = svgEl.createSVGPoint();
+        pt.x = screenX;
+        pt.y = screenY;
+        const svgPt = pt.matrixTransform(inv);
+        return { x: svgPt.x, y: svgPt.y };
+    }
+
+    /**
+     * Retourne la derniere disposition calculee.
+     */
+    function getLastLayout() {
+        return lastLayout;
+    }
+
     /**
      * Calcule les positions des VMs en cercle autour du switch.
      */
@@ -94,20 +118,39 @@ const Topology = (() => {
         const gLines = svgEl("g", { class: "lines-group" });
         canvas.appendChild(gLines);
 
-        // Positions des VMs
-        const vmPositions = calculateVMPositions(vmCount, cx, cy, radius);
+        // Positions des VMs (avec overrides)
+        const defaultVmPositions = calculateVMPositions(vmCount, cx, cy, radius);
+        const vmPositions = defaultVmPositions.map((pos, i) => {
+            const vm = vms[i];
+            return {
+                x: (vm && vm.x !== null && vm.x !== undefined) ? vm.x : pos.x,
+                y: (vm && vm.y !== null && vm.y !== undefined) ? vm.y : pos.y,
+            };
+        });
+
+        // Position du switch (avec override)
+        const switchCx = (state.switchPos && state.switchPos.x !== null) ? state.switchPos.x : cx;
+        const switchCy = (state.switchPos && state.switchPos.y !== null) ? state.switchPos.y : cy;
+
+        // Stocker la disposition pour le drag
+        lastLayout = {
+            switchCenter: { x: switchCx, y: switchCy },
+            vmPositions: vmPositions.map(p => ({ x: p.x, y: p.y })),
+            defaultSwitch: { x: cx, y: cy },
+            defaultVmPositions: defaultVmPositions.map(p => ({ x: p.x, y: p.y })),
+        };
 
         // --- Switch VDE (centre) ---
-        const switchX = cx - SWITCH_W / 2;
-        const switchY = cy - SWITCH_H / 2;
-        const gSwitch = svgEl("g", { class: "switch-node" });
+        const switchX = switchCx - SWITCH_W / 2;
+        const switchY = switchCy - SWITCH_H / 2;
+        const gSwitch = svgEl("g", { class: "switch-node", "data-type": "switch" });
         gSwitch.appendChild(svgEl("rect", {
             x: switchX, y: switchY,
             width: SWITCH_W, height: SWITCH_H,
         }));
         const hubLabel = state.hub ? "VDE HUB" : "VDE Switch";
         const switchText = svgEl("text", {
-            x: cx, y: cy + 5,
+            x: switchCx, y: switchCy + 5,
         });
         switchText.textContent = hubLabel;
         gSwitch.appendChild(switchText);
@@ -120,7 +163,7 @@ const Topology = (() => {
 
             // Ligne switch -> NAT
             gLines.appendChild(svgEl("line", {
-                x1: cx, y1: switchY,
+                x1: switchCx, y1: switchY,
                 x2: natCx, y2: natCy + NAT_RY,
                 class: "link-line-nat",
             }));
@@ -140,13 +183,13 @@ const Topology = (() => {
 
         // --- Serveur vwifi (a gauche du switch) ---
         if (backend === "vwifi") {
-            const srvX = cx - SWITCH_W / 2 - VWIFI_W - 30;
-            const srvY = cy - VWIFI_H / 2;
+            const srvX = switchCx - SWITCH_W / 2 - VWIFI_W - 30;
+            const srvY = switchCy - VWIFI_H / 2;
 
             // Ligne switch -> serveur vwifi
             gLines.appendChild(svgEl("line", {
-                x1: switchX, y1: cy,
-                x2: srvX + VWIFI_W, y2: cy,
+                x1: switchX, y1: switchCy,
+                x2: srvX + VWIFI_W, y2: switchCy,
                 class: "link-line",
             }));
 
@@ -184,7 +227,7 @@ const Topology = (() => {
             // Ligne VM -> Switch
             gLines.appendChild(svgEl("line", {
                 x1: pos.x, y1: pos.y,
-                x2: cx, y2: cy,
+                x2: switchCx, y2: switchCy,
                 class: "link-line",
             }));
 
@@ -268,5 +311,7 @@ const Topology = (() => {
         renderTopology,
         calculateVMPositions,
         vmIP,
+        screenToSVG,
+        getLastLayout,
     };
 })();

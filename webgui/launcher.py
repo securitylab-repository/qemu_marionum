@@ -396,6 +396,18 @@ def _qemu_launch_block(vm_num, resolved, g, backend):
 
     qemu_cmd = "\n".join(qemu_lines)
 
+    xterm_cmd_lines = [
+        f'xterm -title "VM{vm_num} — {static_ip} — {disk_mode}" \\',
+        f'      -geometry {geometry} \\',
+        f'      -fa "DejaVu Sans Mono" \\',
+        f'      -fs 10 \\',
+        f'      -tn xterm-256color \\',
+        f'      {xterm_colors}-xrm "XTerm*selectToClipboard: true" \\',
+        f'      -xrm "XTerm*translations: #override \\\\n Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\\\n Ctrl Shift <Key>V: insert-selection(CLIPBOARD)" \\',
+        f'      -e "/tmp/vde/vm{vm_num}-cmd.sh"',
+    ]
+    xterm_cmd = "\n".join(xterm_cmd_lines)
+
     return f"""CMD_FILE_VM{vm_num}="/tmp/vde/vm{vm_num}-cmd.sh"
 cat > "$CMD_FILE_VM{vm_num}" << 'CMDEOF'
 #!/bin/bash
@@ -403,16 +415,16 @@ cat > "$CMD_FILE_VM{vm_num}" << 'CMDEOF'
 CMDEOF
 chmod +x "$CMD_FILE_VM{vm_num}"
 
+XTERM_FILE_VM{vm_num}="/tmp/vde/vm{vm_num}-xterm.sh"
+cat > "$XTERM_FILE_VM{vm_num}" << 'XTEOF'
+#!/bin/bash
+{xterm_cmd}
+XTEOF
+chmod +x "$XTERM_FILE_VM{vm_num}"
+
 info "VM{vm_num} | {mac_vde} | {static_ip} | {disk_mode} | RAM:{ram} | CPU:{cpu}$([ "$USE_NAT" = true ] && echo " | SSH: localhost:{ssh_port}" || echo '')"
 
-xterm -title "VM{vm_num} — {static_ip} — {disk_mode}" \\
-      -geometry {geometry} \\
-      -fa "DejaVu Sans Mono" \\
-      -fs 10 \\
-      -tn xterm-256color \\
-      {xterm_colors}-xrm "XTerm*selectToClipboard: true" \\
-      -xrm "XTerm*translations: #override \\\\n Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\\\n Ctrl Shift <Key>V: insert-selection(CLIPBOARD)" \\
-      -e "$CMD_FILE_VM{vm_num}" &
+bash "$XTERM_FILE_VM{vm_num}" &
 
 PIDS+=("$!")
 VM_INFO+=("VM{vm_num}|{mac_vde}|{static_ip}|{ssh_port}|$!|{disk_mode}")
