@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=EFREI PARIS QEMU WIFI LAB
 Comment=Interface web pour les labs QEMU
-Exec=bash -c "cd $HOME/qemu_marionum/webgui && xdg-open http://localhost:5000 & python3 app.py; exec bash"
+Exec=bash -c "cd $HOME/qemu_marionum/webgui && (sleep 2 && xdg-open http://localhost:5000 &) && python3 app.py; exec bash"
 Icon=/home/user/qemu_marionum/webgui/static/icon.svg
 Terminal=true
 Type=Application
