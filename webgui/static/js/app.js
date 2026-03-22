@@ -59,6 +59,7 @@
         setupDrag();
         setupContextMenu();
         setupMirrorButton();
+        setupHelpModal();
         setupFileBrowser();
 
         updateAll();
@@ -857,6 +858,32 @@
                 btnMirror.disabled = false;
             }
         };
+    }
+
+    // --- Modal Aide ---
+
+    function setupHelpModal() {
+        const overlay = document.getElementById("help-overlay");
+        const btnOpen = document.getElementById("btn-help");
+        const btnClose = document.getElementById("btn-close-help");
+
+        btnOpen.addEventListener("click", () => {
+            overlay.style.display = "flex";
+        });
+
+        btnClose.addEventListener("click", () => {
+            overlay.style.display = "none";
+        });
+
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) overlay.style.display = "none";
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && overlay.style.display !== "none") {
+                overlay.style.display = "none";
+            }
+        });
     }
 
     // --- Explorateur de fichiers ---

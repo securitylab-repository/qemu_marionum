@@ -886,3 +886,127 @@ fieldset label input[type="checkbox"] {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* ===== Bouton Aide ===== */
+.btn-help {
+    font-size: 1rem;
+    font-weight: 700;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-help:hover {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+/* ===== Modal Aide ===== */
+.modal-help {
+    width: 750px;
+    max-width: 92vw;
+    max-height: 85vh;
+}
+
+.help-content {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.help-content h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--accent-blue);
+    margin: 20px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.help-content h4:first-child {
+    margin-top: 0;
+}
+
+.help-content p {
+    margin: 6px 0;
+}
+
+.help-content ol,
+.help-content ul {
+    margin: 6px 0;
+    padding-left: 22px;
+}
+
+.help-content li {
+    margin-bottom: 4px;
+}
+
+.help-content code {
+    background: var(--bg-primary);
+    color: var(--accent-yellow);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    font-size: 0.82rem;
+}
+
+.help-content a {
+    color: var(--accent-blue);
+    text-decoration: none;
+}
+
+.help-content a:hover {
+    text-decoration: underline;
+}
+
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 0.82rem;
+}
+
+.help-table th,
+.help-table td {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.help-table th {
+    background: var(--bg-primary);
+    color: var(--accent-blue);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+}
+
+.help-table td {
+    background: var(--bg-secondary);
+}
+
+.help-pre {
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin: 8px 0;
+    white-space: pre;
+}
