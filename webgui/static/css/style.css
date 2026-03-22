@@ -341,6 +341,10 @@ body {
 }
 
 /* Serveur vwifi */
+.vwifi-server-node {
+    cursor: pointer;
+}
+
 .vwifi-server-node rect {
     fill: #805ad5;
     rx: 6;

@@ -357,18 +357,24 @@ $QEMU \\
 EOF
     chmod +x "$cmd_file"
 
+    # Wrapper xterm pour permettre le redémarrage individuel via webgui
+    local xterm_file="/tmp/vde/vm${vm_num}-xterm.sh"
+    cat > "$xterm_file" << EOF
+#!/bin/bash
+xterm -title "VM${vm_num} — $static_ip — $DISK_MODE" \
+      -geometry 100x25 \
+      -fa "DejaVu Sans Mono" \
+      -fs 10 \
+      -tn xterm-256color \
+      -xrm "XTerm*selectToClipboard: true" \
+      -xrm "XTerm*translations: #override \\n Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\n Ctrl Shift <Key>V: insert-selection(CLIPBOARD)" \
+      -e "$cmd_file"
+EOF
+    chmod +x "$xterm_file"
+
     info "Démarrage VM${vm_num} | MAC: $mac_vde | IP: $static_ip | Disk: $DISK_MODE$([ "$USE_NAT" = true ] && echo " | SSH: localhost:$ssh_port" || echo '')"
 
-    xterm -title "VM${vm_num} — $static_ip — $DISK_MODE" \
-          -geometry 100x25 \
-          -fa "DejaVu Sans Mono" \
-          -fs 10 \
-          -tn xterm-256color \
-          -xrm "XTerm*selectToClipboard: true" \
-          -xrm "XTerm*translations: #override \\n\
-                Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\n\
-                Ctrl Shift <Key>V: insert-selection(CLIPBOARD)" \
-          -e "$cmd_file" &
+    bash "$xterm_file" &
 
     local pid=$!
     PIDS+=("$pid")

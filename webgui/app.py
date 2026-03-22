@@ -168,11 +168,11 @@ def api_status():
         })
 
 
-@app.route("/api/vm/status/<int:vm_num>")
-def api_vm_status(vm_num):
-    """Verifie si une VM individuelle tourne."""
-    cmd_script = f"/tmp/vde/vm{vm_num}-cmd.sh"
-    xterm_script = f"/tmp/vde/vm{vm_num}-xterm.sh"
+@app.route("/api/vm/status/<vm_id>")
+def api_vm_status(vm_id):
+    """Verifie si une VM individuelle tourne. vm_id = "1", "2", ... ou "server"."""
+    cmd_script = f"/tmp/vde/vm{vm_id}-cmd.sh"
+    xterm_script = f"/tmp/vde/vm{vm_id}-xterm.sh"
     has_scripts = os.path.exists(cmd_script) and os.path.exists(xterm_script)
     running = False
     if has_scripts:
@@ -191,20 +191,21 @@ def api_vm_status(vm_num):
 def api_vm_stop():
     """Arrete une VM individuelle."""
     params = request.get_json(force=True) if request.data else {}
-    vm_num = params.get("vm_num")
-    if not vm_num:
-        return jsonify({"error": "vm_num requis."}), 400
+    vm_id = str(params.get("vm_id") or params.get("vm_num") or "")
+    if not vm_id:
+        return jsonify({"error": "vm_id requis."}), 400
 
-    cmd_script = f"/tmp/vde/vm{vm_num}-cmd.sh"
+    label = "vwifi-server" if vm_id == "server" else f"VM{vm_id}"
+    cmd_script = f"/tmp/vde/vm{vm_id}-cmd.sh"
     try:
         result = subprocess.run(
             ["pkill", "-f", cmd_script],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:
-            return jsonify({"ok": True, "message": f"VM{vm_num} arretee."})
+            return jsonify({"ok": True, "message": f"{label} arretee."})
         else:
-            return jsonify({"ok": False, "message": f"VM{vm_num} non trouvee ou deja arretee."})
+            return jsonify({"ok": False, "message": f"{label} non trouvee ou deja arretee."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -213,12 +214,13 @@ def api_vm_stop():
 def api_vm_start():
     """Demarre (ou redemarre) une VM individuelle."""
     params = request.get_json(force=True) if request.data else {}
-    vm_num = params.get("vm_num")
-    if not vm_num:
-        return jsonify({"error": "vm_num requis."}), 400
+    vm_id = str(params.get("vm_id") or params.get("vm_num") or "")
+    if not vm_id:
+        return jsonify({"error": "vm_id requis."}), 400
 
-    xterm_script = f"/tmp/vde/vm{vm_num}-xterm.sh"
-    cmd_script = f"/tmp/vde/vm{vm_num}-cmd.sh"
+    label = "vwifi-server" if vm_id == "server" else f"VM{vm_id}"
+    xterm_script = f"/tmp/vde/vm{vm_id}-xterm.sh"
+    cmd_script = f"/tmp/vde/vm{vm_id}-cmd.sh"
 
     if not os.path.exists(xterm_script):
         return jsonify({"error": f"Script {xterm_script} introuvable. Lancez le lab d'abord."}), 404
@@ -230,7 +232,7 @@ def api_vm_start():
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:
-            return jsonify({"error": f"VM{vm_num} est deja en cours d'execution."}), 409
+            return jsonify({"error": f"{label} est deja en cours d'execution."}), 409
     except Exception:
         pass
 
@@ -241,7 +243,7 @@ def api_vm_start():
             stderr=subprocess.DEVNULL,
             cwd=PROJECT_ROOT,
         )
-        return jsonify({"ok": True, "message": f"VM{vm_num} demarree."})
+        return jsonify({"ok": True, "message": f"{label} demarree."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

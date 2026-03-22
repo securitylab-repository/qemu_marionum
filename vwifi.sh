@@ -709,18 +709,26 @@ $QEMU \
 EOF
     chmod +x "$cmd_file"
 
+    # Écrire le wrapper xterm pour permettre le redémarrage individuel
+    local xterm_file="/tmp/vde/vmserver-xterm.sh"
+    cat > "$xterm_file" << EOF
+#!/bin/bash
+xterm -title "vwifi-server (auto) — ${server_ip}" \
+      -geometry 90x24 \
+      -fa "DejaVu Sans Mono" \
+      -fs 10 \
+      -tn xterm-256color \
+      -bg "#1e1e1e" \
+      -fg "#d4d4d4" \
+      -xrm "XTerm*selectToClipboard: true" \
+      -xrm "XTerm*translations: #override \\n Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\n Ctrl Shift <Key>V: insert-selection(CLIPBOARD)" \
+      -e "$cmd_file"
+EOF
+    chmod +x "$xterm_file"
+
     info "vwifi-server | $SERVER_MAC_VDE | $server_ip/${VDE_MASK} | $DISK_MODE$([ "$USE_NAT" = true ] && echo " | SSH: localhost:$ssh_port" || echo '')"
 
-    xterm -title "vwifi-server (auto) — ${server_ip}" \
-          -geometry 90x24 \
-          -fa "DejaVu Sans Mono" \
-          -fs 10 \
-          -tn xterm-256color \
-          -bg "#1e1e1e" \
-          -fg "#d4d4d4" \
-          -xrm "XTerm*selectToClipboard: true" \
-          -xrm "XTerm*translations: #override \\n Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\n Ctrl Shift <Key>V: insert-selection(CLIPBOARD)" \
-          -e "$cmd_file" &
+    bash "$xterm_file" &
 
     local pid=$!
     PIDS+=("$pid")

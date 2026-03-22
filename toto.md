@@ -1,1 +1,4 @@
 - menu aide : comment uiliser l'application graphique, comment utiliser les scirpt cloudinit, ....
+- sortie xterm des autres meme que celle de vwifi.sh avec le ctrl shift c et v 
+- que les infos de sortie des autres script ressemble a celle de vwifi.sh
+- dans vwifi pouvoir arreter ou demarrer le vwifi-server 

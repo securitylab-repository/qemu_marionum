@@ -193,7 +193,7 @@ const Topology = (() => {
                 class: "link-line",
             }));
 
-            const gSrv = svgEl("g", { class: "vwifi-server-node" });
+            const gSrv = svgEl("g", { class: "vwifi-server-node", "data-vm-id": "server" });
             gSrv.appendChild(svgEl("rect", {
                 x: srvX, y: srvY,
                 width: VWIFI_W, height: VWIFI_H,

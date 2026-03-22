@@ -288,14 +288,28 @@
 
     function setupContextMenu() {
         const menu = document.getElementById("vm-context-menu");
-        let contextVmId = null;
+        const selectItem = menu.querySelector('[data-action="select"]');
+        const selectSeparator = selectItem ? selectItem.previousElementSibling : null;
+        let contextVmId = null; // int pour VMs clientes, "server" pour vwifi-server
 
         canvas.addEventListener("contextmenu", (e) => {
+            // Detecter VM cliente ou vwifi-server
             const vmNode = e.target.closest(".vm-node");
-            if (!vmNode) return;
+            const srvNode = e.target.closest(".vwifi-server-node");
+            if (!vmNode && !srvNode) return;
 
             e.preventDefault();
-            contextVmId = parseInt(vmNode.getAttribute("data-vm-id"), 10);
+
+            if (srvNode) {
+                contextVmId = "server";
+                // Masquer "Configurer VM" pour le serveur
+                if (selectItem) selectItem.style.display = "none";
+                if (selectSeparator) selectSeparator.style.display = "none";
+            } else {
+                contextVmId = parseInt(vmNode.getAttribute("data-vm-id"), 10);
+                if (selectItem) selectItem.style.display = "";
+                if (selectSeparator) selectSeparator.style.display = "";
+            }
 
             // Positionner le menu
             menu.style.left = e.clientX + "px";
@@ -305,20 +319,17 @@
             // Griser les items selon l'etat
             const startItem = menu.querySelector('[data-action="start"]');
             const stopItem = menu.querySelector('[data-action="stop"]');
-            // Desactiver par defaut
             startItem.setAttribute("data-disabled", "true");
             stopItem.setAttribute("data-disabled", "true");
 
-            if (!state.labRunning) {
-                // Lab pas running : tout grise
-                return;
-            }
+            if (!state.labRunning) return;
 
-            // Fetch status de la VM
-            const vmIdx = state.vms.findIndex(v => v.id === contextVmId);
-            const vmNum = vmIdx + 1;
+            // Resoudre l'identifiant pour l'API
+            const apiId = (contextVmId === "server")
+                ? "server"
+                : String(state.vms.findIndex(v => v.id === contextVmId) + 1);
 
-            fetch(`/api/vm/status/${vmNum}`)
+            fetch(`/api/vm/status/${apiId}`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.running) {
@@ -341,30 +352,51 @@
             menu.style.display = "none";
 
             if (action === "select") {
-                selectVM(contextVmId);
+                if (contextVmId !== "server") selectVM(contextVmId);
                 return;
             }
 
-            const vmIdx = state.vms.findIndex(v => v.id === contextVmId);
-            const vmNum = vmIdx + 1;
+            const isServer = contextVmId === "server";
+            const apiId = isServer
+                ? "server"
+                : String(state.vms.findIndex(v => v.id === contextVmId) + 1);
+            const label = isServer ? "vwifi-server" : `VM${apiId}`;
 
             if (action === "stop") {
                 fetch("/api/vm/stop", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ vm_num: vmNum }),
+                    body: JSON.stringify({ vm_id: apiId }),
                 })
                     .then(r => r.json())
                     .then(data => {
                         const msg = data.message || data.error || "OK";
-                        outputContent.textContent += `[VM${vmNum}] ${msg}\n`;
+                        outputContent.textContent += `[${label}] ${msg}\n`;
                         outputContent.scrollTop = outputContent.scrollHeight;
                     })
                     .catch(err => {
                         outputContent.textContent += `[ERREUR] ${err.message}\n`;
                     });
             } else if (action === "start") {
-                startOrLaunchVM(vmNum, contextVmId);
+                if (isServer) {
+                    // Serveur : demarrage direct (pas de launch-single)
+                    fetch("/api/vm/start", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ vm_id: "server" }),
+                    })
+                        .then(r => r.json())
+                        .then(data => {
+                            const msg = data.message || data.error || "OK";
+                            outputContent.textContent += `[${label}] ${msg}\n`;
+                            outputContent.scrollTop = outputContent.scrollHeight;
+                        })
+                        .catch(err => {
+                            outputContent.textContent += `[ERREUR] ${err.message}\n`;
+                        });
+                } else {
+                    startOrLaunchVM(parseInt(apiId, 10), contextVmId);
+                }
             }
         });
 
