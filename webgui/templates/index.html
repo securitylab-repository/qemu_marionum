@@ -270,17 +270,17 @@
             </div>
             <div class="help-content">
 
-                <h4>Presentation</h4>
-                <p>Interface web pour deployer des labs multi-VMs bases sur QEMU + VDE (Virtual Distributed Ethernet).
-                Les VMs communiquent entre elles via un switch virtuel userspace, sans acces root sur le host.</p>
+                <h4>Présentation</h4>
+                <p>Interface web pour déployer des labs multi-VMs basés sur QEMU + VDE (Virtual Distributed Ethernet).
+                Les VMs communiquent entre elles via un switch virtuel userspace, sans accès root sur le host.</p>
 
-                <h4>Demarrage rapide</h4>
+                <h4>Démarrage rapide</h4>
                 <ol>
-                    <li><strong>Selectionnez une image disque</strong> — champ obligatoire (bouton "Parcourir..." pour naviguer dans le systeme de fichiers)</li>
+                    <li><strong>Sélectionnez une image disque</strong> — champ obligatoire (bouton "Parcourir..." pour naviguer dans le système de fichiers)</li>
                     <li><strong>Choisissez un backend</strong> — Alpine (fw_cfg), Debian (cloud-init), ou Debian (vwifi)</li>
-                    <li><strong>Ajoutez des VMs</strong> — glissez l'icone "+ VM" depuis la palette sur le canvas</li>
-                    <li><strong>Cliquez "Lancer"</strong> — demarre le switch VDE + toutes les VMs. Chaque VM s'ouvre dans un xterm</li>
-                    <li><strong>Cliquez "Stopper"</strong> — arrete tout le lab (VMs, switch VDE, captures)</li>
+                    <li><strong>Ajoutez des VMs</strong> — glissez l'icône "+ VM" depuis la palette sur le canvas</li>
+                    <li><strong>Cliquez "Lancer"</strong> — démarre le switch VDE + toutes les VMs. Chaque VM s'ouvre dans un xterm</li>
+                    <li><strong>Cliquez "Stopper"</strong> — arrête tout le lab (VMs, switch VDE, captures)</li>
                 </ol>
 
                 <h4>Les 3 backends</h4>
@@ -289,8 +289,8 @@
                     <tr>
                         <td><strong>fw_cfg</strong></td>
                         <td>Alpine Linux</td>
-                        <td>Scripts injectes via QEMU fw_cfg</td>
-                        <td>VMs legeres, boot rapide</td>
+                        <td>Scripts injectés via QEMU fw_cfg</td>
+                        <td>VMs légères, boot rapide</td>
                     </tr>
                     <tr>
                         <td><strong>cloud-init</strong></td>
@@ -305,24 +305,24 @@
                         <td>Labs WiFi : hostapd, wpa_supplicant, iw</td>
                     </tr>
                 </table>
-                <p>En mode <strong>vwifi</strong>, une VM serveur (vwifi-server) est automatiquement deployee en plus des VMs clientes.</p>
+                <p>En mode <strong>vwifi</strong>, une VM serveur (vwifi-server) est automatiquement déployée en plus des VMs clientes.</p>
 
                 <h4>Modes disque</h4>
                 <table class="help-table">
                     <tr><th>Mode</th><th>Description</th></tr>
-                    <tr><td><strong>snapshot</strong></td><td>Volatile — les modifications sont perdues a l'arret (RAM uniquement)</td></tr>
-                    <tr><td><strong>overlay</strong></td><td>Delta qcow2 — les modifications sont sauvegardees dans un fichier separe</td></tr>
-                    <tr><td><strong>copy</strong></td><td>Copie complete du disque — independant de l'original</td></tr>
-                    <tr><td><strong>shared</strong></td><td>Ecrit directement sur l'image — dangereux, utiliser avec precaution</td></tr>
+                    <tr><td><strong>snapshot</strong></td><td>Volatile — les modifications sont perdues à l'arrêt (RAM uniquement)</td></tr>
+                    <tr><td><strong>overlay</strong></td><td>Delta qcow2 — les modifications sont sauvegardées dans un fichier séparé</td></tr>
+                    <tr><td><strong>copy</strong></td><td>Copie complète du disque — indépendant de l'original</td></tr>
+                    <tr><td><strong>shared</strong></td><td>Écrit directement sur l'image — dangereux, utiliser avec précaution</td></tr>
                 </table>
 
                 <h4>Gestion individuelle des VMs</h4>
                 <ul>
-                    <li><strong>Clic droit</strong> sur une VM du canvas &rarr; menu contextuel : Demarrer / Arreter / Configurer</li>
+                    <li><strong>Clic droit</strong> sur une VM du canvas &rarr; menu contextuel : Démarrer / Arrêter / Configurer</li>
                     <li><strong>Clic gauche</strong> sur une VM &rarr; ouvre le panneau de configuration per-VM (disque, RAM, CPU, backend, paquets)</li>
-                    <li><strong>Drag</strong> sur une VM ou le switch &rarr; deplacer les icones sur le canvas</li>
-                    <li>Les VMs peuvent etre arretees et redemarrees individuellement une fois le lab lance</li>
-                    <li>Fermer le xterm d'une VM = arreter la VM (SIGHUP tue le processus QEMU)</li>
+                    <li><strong>Drag</strong> sur une VM ou le switch &rarr; déplacer les icônes sur le canvas</li>
+                    <li>Les VMs peuvent être arrêtées et redémarrées individuellement une fois le lab lancé</li>
+                    <li>Fermer le xterm d'une VM = arrêter la VM (SIGHUP tue le processus QEMU)</li>
                 </ul>
 
                 <h4>Port mirroring — Wireshark</h4>
@@ -330,17 +330,17 @@
                 <ol>
                     <li>Lancez le lab normalement</li>
                     <li>Cliquez le bouton <strong>"Wireshark"</strong> (violet) dans le panneau de sortie</li>
-                    <li>L'application cree un pipe nomme et lance <code>vdecapture</code></li>
-                    <li>Executez la commande affichee dans un terminal :<br>
+                    <li>L'application crée un pipe nommé et lance <code>vdecapture</code></li>
+                    <li>Exécutez la commande affichée dans un terminal :<br>
                         <code>sudo wireshark -k -i /tmp/vde/vde.pipe</code></li>
-                    <li>Une fois Wireshark connecte, le port est automatiquement passe en mode HUB</li>
-                    <li>Pour arreter : cliquez "Stop mirror"</li>
+                    <li>Une fois Wireshark connecté, le port est automatiquement passé en mode HUB</li>
+                    <li>Pour arrêter : cliquez "Stop mirror"</li>
                 </ol>
-                <p><strong>Prerequis</strong> : <code>vdecapture</code> (compiler depuis
+                <p><strong>Prérequis</strong> : <code>vdecapture</code> (compiler depuis
                 <a href="https://github.com/virtualsquare/vdecapture" target="_blank">github.com/virtualsquare/vdecapture</a>),
                 <code>socat</code>, et <code>wireshark</code>.</p>
 
-                <h4>Reseau</h4>
+                <h4>Réseau</h4>
                 <pre class="help-pre">VM1 (192.168.100.10)    VM2 (192.168.100.11)    VMn
        |                       |                  |
        +----------- VDE switch (/tmp/vde/switch) -+
@@ -349,29 +349,29 @@ VM1 (10.0.2.15)         VM2 (10.0.2.15)
        |                       |
        +---- NAT QEMU (10.0.2.2) ---&gt; Internet</pre>
                 <ul>
-                    <li><strong>Reseau VDE</strong> : switch virtuel inter-VMs (configurable : CIDR, IP de base)</li>
-                    <li><strong>NAT QEMU</strong> : acces Internet + redirection SSH par port (desactivable avec "Pas de NAT")</li>
-                    <li><strong>Acces SSH</strong> : <code>ssh debian@localhost -p 2222</code> (port = base SSH + index VM)</li>
+                    <li><strong>Réseau VDE</strong> : switch virtuel inter-VMs (configurable : CIDR, IP de base)</li>
+                    <li><strong>NAT QEMU</strong> : accès Internet + redirection SSH par port (désactivable avec "Pas de NAT")</li>
+                    <li><strong>Accès SSH</strong> : <code>ssh debian@localhost -p 2222</code> (port = base SSH + index VM)</li>
                 </ul>
 
                 <h4>Scripts bash</h4>
-                <p>L'interface web genere les memes commandes que les scripts en ligne de commande :</p>
+                <p>L'interface web génère les mêmes commandes que les scripts en ligne de commande :</p>
                 <ul>
                     <li><code>./fwcfg.sh --count 3 --ram 512 image.qcow2</code></li>
                     <li><code>./cloudinit.sh --count 2 --password debian image.qcow2</code></li>
                     <li><code>./vwifi.sh --count 2 --wlan-count 1 image.qcow2</code></li>
-                    <li><code>./cloudinit.sh --stop</code> — arrete le lab</li>
+                    <li><code>./cloudinit.sh --stop</code> — arrête le lab</li>
                 </ul>
-                <p>La commande CLI equivalente est visible en bas de l'interface (pied de page).</p>
+                <p>La commande CLI équivalente est visible en bas de l'interface (pied de page).</p>
 
-                <h4>Fichiers generes</h4>
+                <h4>Fichiers générés</h4>
                 <p>Tout est dans <code>/tmp/vde/</code> :</p>
                 <table class="help-table">
                     <tr><th>Fichier</th><th>Description</th></tr>
                     <tr><td><code>switch/</code></td><td>Socket VDE</td></tr>
                     <tr><td><code>mgmt</code></td><td>Socket management (<code>unixterm /tmp/vde/mgmt</code>)</td></tr>
                     <tr><td><code>vmN-cmd.sh</code></td><td>Commande QEMU par VM</td></tr>
-                    <tr><td><code>vmN-xterm.sh</code></td><td>Wrapper xterm par VM (pour redemarrage individuel)</td></tr>
+                    <tr><td><code>vmN-xterm.sh</code></td><td>Wrapper xterm par VM (pour redémarrage individuel)</td></tr>
                     <tr><td><code>seeds/</code></td><td>Seeds ISO cloud-init</td></tr>
                     <tr><td><code>vm_pids.txt</code></td><td>PIDs des xterms</td></tr>
                     <tr><td><code>vde.pipe</code></td><td>FIFO pour Wireshark (mode mirror)</td></tr>
@@ -380,9 +380,9 @@ VM1 (10.0.2.15)         VM2 (10.0.2.15)
                 <h4>Raccourcis clavier</h4>
                 <table class="help-table">
                     <tr><th>Raccourci</th><th>Action</th></tr>
-                    <tr><td>Clic droit sur VM</td><td>Menu contextuel (demarrer/arreter)</td></tr>
+                    <tr><td>Clic droit sur VM</td><td>Menu contextuel (démarrer/arrêter)</td></tr>
                     <tr><td>Clic gauche sur VM</td><td>Configurer la VM</td></tr>
-                    <tr><td>Drag sur VM/switch</td><td>Deplacer sur le canvas</td></tr>
+                    <tr><td>Drag sur VM/switch</td><td>Déplacer sur le canvas</td></tr>
                     <tr><td>Escape</td><td>Fermer les menus et modales</td></tr>
                 </table>
 
