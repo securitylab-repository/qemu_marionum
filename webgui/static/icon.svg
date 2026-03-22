@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="wifi" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#00d4ff"/>
+      <stop offset="100%" stop-color="#0080ff"/>
+    </linearGradient>
+    <linearGradient id="vm" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4fc3f7"/>
+      <stop offset="100%" stop-color="#0288d1"/>
+    </linearGradient>
+    <linearGradient id="link" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.6"/>
+      <stop offset="50%" stop-color="#00d4ff" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#00d4ff" stop-opacity="0.6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="4" y="4" width="248" height="248" rx="40" ry="40" fill="url(#bg)" stroke="#0080ff" stroke-width="3" stroke-opacity="0.4"/>
+
+  <!-- WiFi arcs at top center -->
+  <g transform="translate(128, 82)" fill="none" stroke="url(#wifi)" stroke-width="5" stroke-linecap="round">
+    <path d="M-48,-28 A 56,56 0 0,1 48,-28" opacity="0.5"/>
+    <path d="M-34,-20 A 40,40 0 0,1 34,-20" opacity="0.7"/>
+    <path d="M-20,-12 A 24,24 0 0,1 20,-12" opacity="0.9"/>
+    <circle cx="0" cy="0" r="5" fill="url(#wifi)" stroke="none"/>
+  </g>
+
+  <!-- Network links between VMs -->
+  <line x1="68" y1="170" x2="128" y2="130" stroke="url(#link)" stroke-width="2.5" stroke-dasharray="4,3"/>
+  <line x1="188" y1="170" x2="128" y2="130" stroke="url(#link)" stroke-width="2.5" stroke-dasharray="4,3"/>
+  <line x1="68" y1="170" x2="188" y2="170" stroke="url(#link)" stroke-width="2.5" stroke-dasharray="4,3"/>
+
+  <!-- VM node left -->
+  <g transform="translate(68, 170)">
+    <rect x="-24" y="-18" width="48" height="36" rx="6" fill="url(#vm)" opacity="0.9"/>
+    <text x="0" y="1" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="11" fill="#fff" dominant-baseline="middle">VM1</text>
+  </g>
+
+  <!-- VM node right -->
+  <g transform="translate(188, 170)">
+    <rect x="-24" y="-18" width="48" height="36" rx="6" fill="url(#vm)" opacity="0.9"/>
+    <text x="0" y="1" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="11" fill="#fff" dominant-baseline="middle">VM2</text>
+  </g>
+
+  <!-- Central switch node -->
+  <g transform="translate(128, 130)">
+    <circle r="16" fill="#0f3460" stroke="#00d4ff" stroke-width="2"/>
+    <text x="0" y="1" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="8" fill="#00d4ff" dominant-baseline="middle">VDE</text>
+  </g>
+
+  <!-- Label QEMU at bottom -->
+  <text x="128" y="228" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="22" fill="#e0e0e0" letter-spacing="4">QEMU</text>
+</svg>
