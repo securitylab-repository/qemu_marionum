@@ -78,6 +78,7 @@ VDE_MGMT="/tmp/vde/mgmt"
 QEMU="qemu-system-x86_64"
 DISK=""
 STOP=false
+RECAP=false
 PIDS=()
 VM_INFO=()
 
@@ -104,6 +105,7 @@ parse_args() {
             --net-script) NET_SCRIPT="$2"; shift 2 ;;
             --pkg-list)   PKG_LIST="$2";   shift 2 ;;
             --stop)       STOP=true;       shift ;;
+            --recap)      RECAP=true;      shift ;;
             --help)
                 sed -n '3,28p' "$0" \
                     | sed 's/^# \{0,1\}//' \
@@ -384,52 +386,98 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
-# print_summary — affiche le tableau récapitulatif
+# print_summary — affiche le tableau récapitulatif et sauvegarde dans summary.txt
 # -----------------------------------------------------------------------------
 print_summary() {
+    local summary_file="/tmp/vde/summary.txt"
+
+    _print_summary_content | tee "$summary_file"
+
+    printf "%s\n" "${PIDS[@]}" > /tmp/vde/vm_pids.txt
+    info "PIDs sauvegardés dans /tmp/vde/vm_pids.txt"
+}
+
+_print_summary_content() {
     echo ""
     echo "=================================================================="
-    echo -e "${GREEN}  Réseau QEMU+VDE — $COUNT VM(s) démarrée(s)${NC}"
+    echo -e "${GREEN}  Lab QEMU+VDE Alpine — $COUNT VM(s) démarrée(s)${NC}"
     echo "=================================================================="
     echo ""
     echo "  Disque      : $(basename "$DISK") | Mode: $DISK_MODE"
-    echo "  Switch VDE  : $VDE_SOCKET ($( $HUB_MODE && echo 'mode HUB' || echo 'mode SWITCH'))"
+    echo "  Switch VDE  : $VDE_SOCKET ($( $HUB_MODE && echo 'HUB' || echo 'SWITCH'))"
     echo "  Management  : $VDE_MGMT  (unixterm $VDE_MGMT)"
     echo "  Réseau VDE  : $VDE_NET (inter-VMs)"
-    $USE_NAT && echo "  Réseau NAT  : 10.0.2.0/24 (Internet) | Gateway: 10.0.2.2"
+    $USE_NAT && echo "  NAT         : 10.0.2.0/24 | Gateway: 10.0.2.2 | DNS: 10.0.2.3"
     echo "  Config boot : $NET_SCRIPT (via fw_cfg)"
-    $MIRROR && echo "  Mirror      : actif → port $MIRROR_PORT | pipe: $MIRROR_PIPE"
     echo ""
 
     if $USE_NAT; then
-        printf "  %-6s %-20s %-18s %-14s %-10s %s\n" \
+        printf "  %-6s %-20s %-20s %-16s %-10s %s\n" \
             "VM" "MAC eth0 (VDE)" "IP VDE" "SSH host" "Disk" "PID"
-        printf "  %-6s %-20s %-18s %-14s %-10s %s\n" \
-            "------" "--------------------" "------------------" "--------------" "----------" "-------"
+        printf "  %-6s %-20s %-20s %-16s %-10s %s\n" \
+            "------" "--------------------" "--------------------" "----------------" "----------" "-------"
         for info_line in "${VM_INFO[@]}"; do
             IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
-            printf "  %-6s %-20s %-18s %-14s %-10s %s\n" \
+            printf "  %-6s %-20s %-20s %-16s %-10s %s\n" \
                 "$vm" "$mac" "$ip" "localhost:$ssh_port" "$disk_mode" "$pid"
         done
     else
-        printf "  %-6s %-20s %-18s %-10s %s\n" \
+        printf "  %-6s %-20s %-20s %-10s %s\n" \
             "VM" "MAC eth0 (VDE)" "IP VDE" "Disk" "PID"
-        printf "  %-6s %-20s %-18s %-10s %s\n" \
-            "------" "--------------------" "------------------" "----------" "-------"
+        printf "  %-6s %-20s %-20s %-10s %s\n" \
+            "------" "--------------------" "--------------------" "----------" "-------"
         for info_line in "${VM_INFO[@]}"; do
             IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
-            printf "  %-6s %-20s %-18s %-10s %s\n" \
+            printf "  %-6s %-20s %-20s %-10s %s\n" \
                 "$vm" "$mac" "$ip" "$disk_mode" "$pid"
         done
     fi
 
     echo ""
-    echo "  Pour arrêter tout :"
-    echo "    pkill -f qemu-system-x86_64; pkill vde_switch; rm -rf /tmp/vde"
-    echo "=================================================================="
 
-    printf "%s\n" "${PIDS[@]}" > /tmp/vde/vm_pids.txt
-    info "PIDs sauvegardés dans /tmp/vde/vm_pids.txt"
+    # Accès SSH
+    if $USE_NAT; then
+        echo -e "  ${BLUE}── Accès SSH ──${NC}"
+        echo "  Login    : root (Alpine — pas de mot de passe par défaut)"
+        echo ""
+        for info_line in "${VM_INFO[@]}"; do
+            IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
+            echo "  $vm → ssh root@localhost -p $ssh_port   (VDE: $ip)"
+        done
+        echo ""
+    fi
+
+    # Récupérer des fichiers
+    if $USE_NAT; then
+        echo -e "  ${BLUE}── Récupérer des fichiers (scp) ──${NC}"
+        for info_line in "${VM_INFO[@]}"; do
+            IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
+            echo "  $vm → scp -P $ssh_port root@localhost:/chemin/fichier ."
+        done
+        echo ""
+    fi
+
+    # Capture Wireshark
+    echo -e "  ${BLUE}── Capture Wireshark (port mirroring) ──${NC}"
+    echo "  Une fois les VMs démarrées, ouvrir un nouveau terminal :"
+    echo ""
+    echo "    ./$(basename "$0") --mirror"
+    echo ""
+    echo "  Puis lancer Wireshark :"
+    echo ""
+    echo "    sudo wireshark -k -i $MIRROR_PIPE"
+    echo ""
+
+    # Récapitulatif
+    echo -e "  ${BLUE}── Récapitulatif ──${NC}"
+    echo "    ./$(basename "$0") --recap"
+    echo ""
+
+    # Arrêt propre
+    echo -e "  ${BLUE}── Arrêt propre ──${NC}"
+    echo "    ./$(basename "$0") --stop"
+    echo "    # ou : pkill -f qemu-system-x86_64; pkill vde_switch; rm -rf /tmp/vde"
+    echo "=================================================================="
 }
 
 # -----------------------------------------------------------------------------
@@ -582,18 +630,9 @@ stop_lab() {
 # =============================================================================
 parse_args "$@"
 
-# Mode arrêt
-if $STOP; then
-    stop_lab
-    exit 0
-fi
-
-# Mode mirror seul — lab déjà lancé
-if $MIRROR; then
-    check_deps
-    start_mirror
-    exit 0
-fi
+$STOP   && stop_lab   && exit 0
+$RECAP  && { [ -f /tmp/vde/summary.txt ] && cat /tmp/vde/summary.txt || error "Aucun récapitulatif trouvé — le lab n'est pas démarré"; } && exit 0
+$MIRROR && check_deps && start_mirror && exit 0
 
 check_deps
 generate_net_script

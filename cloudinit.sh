@@ -80,6 +80,7 @@ VDE_MGMT="/tmp/vde/mgmt"
 QEMU="qemu-system-x86_64"
 DISK=""
 STOP=false
+RECAP=false
 PIDS=()
 VM_INFO=()
 
@@ -104,6 +105,7 @@ parse_args() {
             --ssh-key)    SSH_KEY_FILE="$2";  shift 2 ;;
             --password)   CLOUD_PASS="$2";    shift 2 ;;
             --stop)       STOP=true;          shift ;;
+            --recap)      RECAP=true;         shift ;;
             --help)
                 sed -n '3,35p' "$0" | sed 's/^# \{0,1\}//' | sed "s/setup-qemu-vde-debian\.sh/$(basename "$0")/g"
                 exit 0
@@ -516,6 +518,15 @@ EOF
 # RÉSUMÉ
 # =============================================================================
 print_summary() {
+    local summary_file="/tmp/vde/summary.txt"
+
+    _print_summary_content | tee "$summary_file"
+
+    printf "%s\n" "${PIDS[@]}" > /tmp/vde/vm_pids.txt
+    info "PIDs sauvegardés dans /tmp/vde/vm_pids.txt"
+}
+
+_print_summary_content() {
     echo ""
     echo "=================================================================="
     echo -e "${GREEN}  Lab QEMU+VDE Debian — $COUNT VM(s) démarrée(s)${NC}"
@@ -558,13 +569,57 @@ print_summary() {
     fi
 
     echo ""
-    echo "  Arrêt propre :"
+
+    # Accès SSH
+    echo -e "  ${BLUE}── Accès SSH ──${NC}"
+    echo "  Login    : debian"
+    if [ -n "$CLOUD_PASS" ]; then
+        echo "  Password : ****  (mot de passe défini)"
+    elif [ -f "$SSH_KEY_FILE" ]; then
+        echo "  Auth     : clé SSH ($SSH_KEY_FILE)"
+    else
+        echo "  Password : debian  (défaut image — peut échouer)"
+    fi
+    echo ""
+    if $USE_NAT; then
+        for info_line in "${VM_INFO[@]}"; do
+            IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
+            echo "  $vm → ssh debian@localhost -p $ssh_port   (VDE: ${ip}/${VDE_MASK})"
+        done
+        echo ""
+    fi
+
+    # Récupérer des fichiers
+    if $USE_NAT; then
+        echo -e "  ${BLUE}── Récupérer des fichiers (scp) ──${NC}"
+        for info_line in "${VM_INFO[@]}"; do
+            IFS='|' read -r vm mac ip ssh_port pid disk_mode <<< "$info_line"
+            echo "  $vm → scp -P $ssh_port debian@localhost:/chemin/fichier ."
+        done
+        echo ""
+    fi
+
+    # Capture Wireshark
+    echo -e "  ${BLUE}── Capture Wireshark (port mirroring) ──${NC}"
+    echo "  Une fois les VMs démarrées, ouvrir un nouveau terminal :"
+    echo ""
+    echo "    ./$(basename "$0") --mirror"
+    echo ""
+    echo "  Puis lancer Wireshark :"
+    echo ""
+    echo "    sudo wireshark -k -i $MIRROR_PIPE"
+    echo ""
+
+    # Récapitulatif
+    echo -e "  ${BLUE}── Récapitulatif ──${NC}"
+    echo "    ./$(basename "$0") --recap"
+    echo ""
+
+    # Arrêt propre
+    echo -e "  ${BLUE}── Arrêt propre ──${NC}"
     echo "    ./$(basename "$0") --stop"
     echo "    # ou : pkill -f qemu-system-x86_64; pkill vde_switch; rm -rf /tmp/vde"
     echo "=================================================================="
-
-    printf "%s\n" "${PIDS[@]}" > /tmp/vde/vm_pids.txt
-    info "PIDs sauvegardés dans /tmp/vde/vm_pids.txt"
 }
 
 # =============================================================================
@@ -681,6 +736,7 @@ stop_lab() {
 parse_args "$@"
 
 $STOP   && stop_lab   && exit 0
+$RECAP  && { [ -f /tmp/vde/summary.txt ] && cat /tmp/vde/summary.txt || error "Aucun récapitulatif trouvé — le lab n'est pas démarré"; } && exit 0
 $MIRROR && check_deps && start_mirror && exit 0
 
 check_deps
