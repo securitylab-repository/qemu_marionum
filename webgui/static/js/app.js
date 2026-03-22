@@ -446,8 +446,8 @@
                 syncState();
                 updateCLI();
                 renderCanvas();
-                // Mettre a jour les placeholders du panel per-VM
                 Config.updateVmPanel(state);
+                updateDiskWarning();
             });
         });
     }
@@ -609,6 +609,19 @@
         renderCanvas();
     }
 
+    // --- Disk warning ---
+
+    function updateDiskWarning() {
+        const warning = document.getElementById("disk-warning");
+        const diskPath = document.getElementById("disk-path");
+        if (!warning || !diskPath) return;
+        if (diskPath.value.trim()) {
+            warning.classList.add("hidden");
+        } else {
+            warning.classList.remove("hidden");
+        }
+    }
+
     // --- State sync ---
 
     function syncState() {
@@ -626,6 +639,7 @@
         renderCanvas();
         updateCLI();
         Config.updateVmPanel(state);
+        updateDiskWarning();
     }
 
     function renderCanvas() {

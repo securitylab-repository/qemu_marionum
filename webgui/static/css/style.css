@@ -522,6 +522,21 @@ fieldset label input[type="checkbox"] {
     width: 100%;
 }
 
+.disk-warning {
+    background: var(--accent-red);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    text-align: center;
+}
+
+.disk-warning.hidden {
+    display: none;
+}
+
 #disk-path {
     width: 100%;
     padding: 4px 8px;

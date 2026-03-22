@@ -106,8 +106,9 @@
             </fieldset>
 
             <!-- Disque -->
-            <fieldset>
+            <fieldset id="fieldset-disk">
                 <legend>Image disque</legend>
+                <div id="disk-warning" class="disk-warning">Obligatoire : selectionnez une image disque</div>
                 <input type="text" id="disk-path" placeholder="/chemin/vers/image.qcow2" list="disk-list">
                 <datalist id="disk-list"></datalist>
                 <button id="btn-scan-disks" class="btn btn-small" title="Parcourir le systeme de fichiers">Parcourir...</button>
