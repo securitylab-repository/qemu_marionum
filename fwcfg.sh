@@ -362,10 +362,12 @@ EOF
     cat > "$xterm_file" << EOF
 #!/bin/bash
 xterm -title "VM${vm_num} — $static_ip — $DISK_MODE" \
-      -geometry 100x25 \
+      -geometry 90x24 \
       -fa "DejaVu Sans Mono" \
       -fs 10 \
       -tn xterm-256color \
+      -bg "#1e1e1e" \
+      -fg "#d4d4d4" \
       -xrm "XTerm*selectToClipboard: true" \
       -xrm "XTerm*translations: #override \\n Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\n Ctrl Shift <Key>V: insert-selection(CLIPBOARD)" \
       -e "$cmd_file"

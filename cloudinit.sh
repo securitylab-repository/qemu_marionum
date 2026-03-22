@@ -491,7 +491,7 @@ EOF
     cat > "$xterm_file" << EOF
 #!/bin/bash
 xterm -title "VM${vm_num} — ${static_ip} — $DISK_MODE" \
-      -geometry 120x30 \
+      -geometry 90x24 \
       -fa "DejaVu Sans Mono" \
       -fs 10 \
       -tn xterm-256color \
