@@ -444,6 +444,20 @@ def api_mirror_stop():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/memory")
+def api_memory():
+    """Retourne la memoire disponible du systeme en MB."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    kb = int(line.split()[1])
+                    return jsonify({"available_mb": kb // 1024})
+        return jsonify({"available_mb": None})
+    except Exception:
+        return jsonify({"available_mb": None})
+
+
 @app.route("/api/output")
 def api_output():
     """Retourne les nouvelles lignes de sortie depuis l'index donne."""

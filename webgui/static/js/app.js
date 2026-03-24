@@ -27,6 +27,7 @@
         outputOffset: 0,
         pollTimer: null,
         switchPos: { x: null, y: null },
+        availableRam: null,
     };
 
     // Elements du DOM
@@ -61,6 +62,9 @@
         setupMirrorButton();
         setupHelpModal();
         setupFileBrowser();
+
+        fetchMemory();
+        setInterval(fetchMemory, 30000);
 
         updateAll();
     });
@@ -449,6 +453,7 @@
                 renderCanvas();
                 Config.updateVmPanel(state);
                 updateDiskWarning();
+                updateRamWarning();
             });
         });
     }
@@ -623,6 +628,48 @@
         }
     }
 
+    // --- RAM warning ---
+
+    function fetchMemory() {
+        fetch("/api/memory")
+            .then(r => r.json())
+            .then(data => {
+                state.availableRam = data.available_mb;
+                updateRamWarning();
+            })
+            .catch(() => {});
+    }
+
+    function updateRamWarning() {
+        const warning = document.getElementById("ram-warning");
+        if (!warning) return;
+
+        if (state.availableRam === null || state.availableRam === undefined) {
+            warning.classList.add("hidden");
+            warning.className = "ram-warning hidden";
+            return;
+        }
+
+        const globalRam = parseInt(document.getElementById("opt-ram")?.value, 10) || 1024;
+        let totalRam = 0;
+        state.vms.forEach(vm => {
+            totalRam += vm.ram || globalRam;
+        });
+
+        const avail = state.availableRam;
+
+        if (totalRam >= avail) {
+            warning.className = "ram-warning danger";
+            warning.textContent = `Memoire insuffisante ! ${totalRam} MB requis, seulement ${avail} MB disponibles`;
+        } else if (totalRam >= avail * 0.7) {
+            warning.className = "ram-warning warn";
+            warning.textContent = `Attention : ${state.vms.length} VMs x RAM = ${totalRam} MB. Disponible : ${avail} MB`;
+        } else {
+            warning.className = "ram-warning hidden";
+            warning.textContent = "";
+        }
+    }
+
     // --- State sync ---
 
     function syncState() {
@@ -641,6 +688,7 @@
         updateCLI();
         Config.updateVmPanel(state);
         updateDiskWarning();
+        updateRamWarning();
     }
 
     function renderCanvas() {
@@ -663,6 +711,21 @@
         if (state.vms.length < 1) {
             alert("Ajoutez au moins une VM sur le canvas.");
             return;
+        }
+
+        // Verification memoire
+        if (state.availableRam !== null && state.availableRam !== undefined) {
+            const globalRam = parseInt(document.getElementById("opt-ram")?.value, 10) || 1024;
+            let totalRam = 0;
+            state.vms.forEach(vm => { totalRam += vm.ram || globalRam; });
+            if (totalRam >= state.availableRam) {
+                if (!confirm(
+                    `Memoire insuffisante : ${totalRam} MB requis, seulement ${state.availableRam} MB disponibles.\n` +
+                    "Le systeme risque de tuer les VMs (OOM). Lancer quand meme ?"
+                )) {
+                    return;
+                }
+            }
         }
 
         btnLaunch.disabled = true;

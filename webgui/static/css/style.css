@@ -537,6 +537,29 @@ fieldset label input[type="checkbox"] {
     display: none;
 }
 
+.ram-warning {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+    text-align: center;
+}
+
+.ram-warning.hidden {
+    display: none;
+}
+
+.ram-warning.warn {
+    background: var(--accent-orange);
+    color: #fff;
+}
+
+.ram-warning.danger {
+    background: var(--accent-red);
+    color: #fff;
+}
+
 #disk-path {
     width: 100%;
     padding: 4px 8px;
