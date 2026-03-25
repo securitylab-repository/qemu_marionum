@@ -446,8 +446,60 @@ def api_mirror_stop():
 
 @app.route("/api/memory")
 def api_memory():
-    """Retourne la memoire disponible du systeme en MB."""
+    """Retourne la memoire disponible du systeme en MB.
+
+    Priorite : cgroup v2 > cgroup v1 > /proc/meminfo.
+    Dans un container Docker, /proc/meminfo montre la RAM du host,
+    pas la limite du container. Les cgroups donnent la vraie limite.
+    """
     try:
+        # cgroup v2 : memory.max - (memory.current - inactive_file)
+        # memory.current inclut le page cache reclaimable, il faut le soustraire
+        try:
+            with open("/sys/fs/cgroup/memory.max") as f:
+                val = f.read().strip()
+            if val != "max":
+                limit = int(val)
+                with open("/sys/fs/cgroup/memory.current") as f:
+                    usage = int(f.read().strip())
+                # Lire inactive_file depuis memory.stat (cache reclaimable)
+                inactive = 0
+                try:
+                    with open("/sys/fs/cgroup/memory.stat") as f:
+                        for line in f:
+                            if line.startswith("inactive_file "):
+                                inactive = int(line.split()[1])
+                                break
+                except (FileNotFoundError, ValueError):
+                    pass
+                available = limit - usage + inactive
+                return jsonify({"available_mb": available // (1024 * 1024)})
+        except (FileNotFoundError, ValueError):
+            pass
+
+        # cgroup v1 : memory.limit_in_bytes - (usage - inactive_file)
+        try:
+            with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
+                limit = int(f.read().strip())
+            # Valeur tres grande = pas de limite reelle
+            if limit < 2**62:
+                with open("/sys/fs/cgroup/memory/memory.usage_in_bytes") as f:
+                    usage = int(f.read().strip())
+                inactive = 0
+                try:
+                    with open("/sys/fs/cgroup/memory/memory.stat") as f:
+                        for line in f:
+                            if line.startswith("inactive_file "):
+                                inactive = int(line.split()[1])
+                                break
+                except (FileNotFoundError, ValueError):
+                    pass
+                available = limit - usage + inactive
+                return jsonify({"available_mb": available // (1024 * 1024)})
+        except (FileNotFoundError, ValueError):
+            pass
+
+        # Fallback : /proc/meminfo
         with open("/proc/meminfo") as f:
             for line in f:
                 if line.startswith("MemAvailable:"):
