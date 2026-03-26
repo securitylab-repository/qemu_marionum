@@ -537,6 +537,12 @@ fieldset label input[type="checkbox"] {
     display: none;
 }
 
+.ram-info {
+    font-size: 0.7rem;
+    color: #999;
+    margin-top: 2px;
+}
+
 .ram-warning {
     font-size: 0.75rem;
     font-weight: 700;

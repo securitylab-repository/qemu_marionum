@@ -446,40 +446,67 @@ def api_mirror_stop():
 
 @app.route("/api/memory")
 def api_memory():
-    """Retourne la memoire totale du systeme en MB.
+    """Retourne la RAM et le swap du systeme en MB.
 
-    Priorite : cgroup v2 (memory.max) > cgroup v1 (limit_in_bytes) > /proc/meminfo.
+    Priorite : cgroup v2 > cgroup v1 > /proc/meminfo.
     On retourne la limite totale et non la memoire libre, car QEMU utilise
     le demand paging et ne consomme pas toute la RAM configuree.
     """
+    ram_mb = None
+    swap_mb = None
     try:
+        # --- RAM ---
         # cgroup v2 : memory.max
         try:
             with open("/sys/fs/cgroup/memory.max") as f:
                 val = f.read().strip()
             if val != "max":
-                return jsonify({"available_mb": int(val) // (1024 * 1024)})
+                ram_mb = int(val) // (1024 * 1024)
         except (FileNotFoundError, ValueError):
             pass
 
         # cgroup v1 : memory.limit_in_bytes
+        if ram_mb is None:
+            try:
+                with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
+                    limit = int(f.read().strip())
+                if limit < 2**62:
+                    ram_mb = limit // (1024 * 1024)
+            except (FileNotFoundError, ValueError):
+                pass
+
+        # --- Swap ---
+        # cgroup v2 : memory.swap.max
         try:
-            with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
-                limit = int(f.read().strip())
-            if limit < 2**62:
-                return jsonify({"available_mb": limit // (1024 * 1024)})
+            with open("/sys/fs/cgroup/memory.swap.max") as f:
+                val = f.read().strip()
+            if val != "max":
+                swap_mb = int(val) // (1024 * 1024)
         except (FileNotFoundError, ValueError):
             pass
 
-        # Fallback : /proc/meminfo MemTotal
+        # cgroup v1 : memory.memsw.limit_in_bytes (inclut ram+swap)
+        if swap_mb is None:
+            try:
+                with open("/sys/fs/cgroup/memory/memory.memsw.limit_in_bytes") as f:
+                    memsw = int(f.read().strip())
+                if memsw < 2**62 and ram_mb is not None:
+                    swap_mb = memsw // (1024 * 1024) - ram_mb
+                    if swap_mb < 0:
+                        swap_mb = 0
+            except (FileNotFoundError, ValueError):
+                pass
+
+        # Fallback : /proc/meminfo
         with open("/proc/meminfo") as f:
             for line in f:
-                if line.startswith("MemTotal:"):
-                    kb = int(line.split()[1])
-                    return jsonify({"available_mb": kb // 1024})
-        return jsonify({"available_mb": None})
+                if ram_mb is None and line.startswith("MemTotal:"):
+                    ram_mb = int(line.split()[1]) // 1024
+                if swap_mb is None and line.startswith("SwapTotal:"):
+                    swap_mb = int(line.split()[1]) // 1024
     except Exception:
-        return jsonify({"available_mb": None})
+        pass
+    return jsonify({"ram_mb": ram_mb, "swap_mb": swap_mb})
 
 
 @app.route("/api/output")

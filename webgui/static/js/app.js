@@ -28,6 +28,7 @@
         pollTimer: null,
         switchPos: { x: null, y: null },
         availableRam: null,
+        availableSwap: null,
     };
 
     // Elements du DOM
@@ -634,7 +635,15 @@
         fetch("/api/memory")
             .then(r => r.json())
             .then(data => {
-                state.availableRam = data.available_mb;
+                state.availableRam = data.ram_mb;
+                state.availableSwap = data.swap_mb;
+                // Afficher les valeurs RAM/swap
+                const info = document.getElementById("ram-info");
+                if (info && data.ram_mb !== null) {
+                    const swap = data.swap_mb || 0;
+                    const swapTxt = swap > 0 ? ` | Swap : ${swap} MB` : "";
+                    info.textContent = `RAM : ${data.ram_mb} MB${swapTxt}`;
+                }
                 updateRamWarning();
             })
             .catch(() => {});
@@ -645,8 +654,8 @@
         if (!warning) return;
 
         if (state.availableRam === null || state.availableRam === undefined) {
-            warning.classList.add("hidden");
             warning.className = "ram-warning hidden";
+            warning.textContent = "";
             return;
         }
 
@@ -656,14 +665,21 @@
             totalRam += vm.ram || globalRam;
         });
 
-        const avail = state.availableRam;
+        const ram = state.availableRam;
+        const swap = state.availableSwap || 0;
+        const total = ram + swap;
+        const swapInfo = swap > 0 ? ` + ${swap} MB swap` : "";
+        const sysInfo = `Systeme : ${ram} MB RAM${swapInfo}`;
 
-        if (totalRam >= avail) {
+        if (totalRam >= total) {
             warning.className = "ram-warning danger";
-            warning.textContent = `Memoire insuffisante ! ${totalRam} MB requis, seulement ${avail} MB disponibles`;
-        } else if (totalRam >= avail * 0.7) {
+            warning.textContent = `Memoire insuffisante ! ${totalRam} MB requis. ${sysInfo}`;
+        } else if (totalRam >= ram) {
             warning.className = "ram-warning warn";
-            warning.textContent = `Attention : ${state.vms.length} VMs x RAM = ${totalRam} MB. Disponible : ${avail} MB`;
+            warning.textContent = `RAM depassee (swap sera utilise). ${totalRam} MB requis. ${sysInfo}`;
+        } else if (totalRam >= ram * 0.7) {
+            warning.className = "ram-warning warn";
+            warning.textContent = `Attention : ${totalRam} MB requis. ${sysInfo}`;
         } else {
             warning.className = "ram-warning hidden";
             warning.textContent = "";
@@ -718,10 +734,21 @@
             const globalRam = parseInt(document.getElementById("opt-ram")?.value, 10) || 1024;
             let totalRam = 0;
             state.vms.forEach(vm => { totalRam += vm.ram || globalRam; });
-            if (totalRam >= state.availableRam) {
+            const ram = state.availableRam;
+            const swap = state.availableSwap || 0;
+            const total = ram + swap;
+            const swapInfo = swap > 0 ? ` + ${swap} MB swap` : "";
+            if (totalRam >= total) {
                 if (!confirm(
-                    `Memoire insuffisante : ${totalRam} MB requis, seulement ${state.availableRam} MB disponibles.\n` +
+                    `Memoire insuffisante : ${totalRam} MB requis, seulement ${ram} MB RAM${swapInfo} disponibles.\n` +
                     "Le systeme risque de tuer les VMs (OOM). Lancer quand meme ?"
+                )) {
+                    return;
+                }
+            } else if (totalRam >= ram) {
+                if (!confirm(
+                    `RAM depassee : ${totalRam} MB requis, ${ram} MB RAM${swapInfo}.\n` +
+                    "Le swap sera utilise (performances degradees). Lancer quand meme ?"
                 )) {
                     return;
                 }
