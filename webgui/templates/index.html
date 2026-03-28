@@ -17,6 +17,8 @@
             <span id="status-badge" class="badge badge-idle">Idle</span>
             <button id="btn-launch" class="btn btn-launch">Lancer</button>
             <button id="btn-stop" class="btn btn-stop" disabled>Stopper</button>
+            <button id="btn-restart" class="btn btn-restart" disabled>Redemarrer</button>
+            <button id="btn-clean" class="btn btn-clean" disabled>Nettoyer</button>
             <button id="btn-help" class="btn btn-small btn-help" title="Aide">?</button>
         </div>
     </header>
@@ -282,8 +284,18 @@
                     <li><strong>Choisissez un backend</strong> — Alpine (fw_cfg), Debian (cloud-init), ou Debian (vwifi)</li>
                     <li><strong>Ajoutez des VMs</strong> — glissez l'icône "+ VM" depuis la palette sur le canvas</li>
                     <li><strong>Cliquez "Lancer"</strong> — démarre le switch VDE + toutes les VMs. Chaque VM s'ouvre dans un xterm</li>
-                    <li><strong>Cliquez "Stopper"</strong> — arrête tout le lab (VMs, switch VDE, captures)</li>
+                    <li><strong>Cliquez "Stopper"</strong> — arrête les processus (l'état est préservé dans /tmp/vde/)</li>
                 </ol>
+
+                <h4>Cycle de vie du lab</h4>
+                <table class="help-table">
+                    <tr><th>Bouton</th><th>Action</th><th>État après</th></tr>
+                    <tr><td><strong>Lancer</strong></td><td>Démarre un nouveau lab (nettoie l'ancien si existant)</td><td>Running</td></tr>
+                    <tr><td><strong>Stopper</strong></td><td>Tue les processus, préserve disques/scripts dans /tmp/vde/</td><td>Stopped</td></tr>
+                    <tr><td><strong>Redémarrer</strong></td><td>Recrée le switch VDE et relance les VMs depuis les scripts préservés</td><td>Running</td></tr>
+                    <tr><td><strong>Nettoyer</strong></td><td>Tue les processus et supprime /tmp/vde/ (retour à zéro)</td><td>Idle</td></tr>
+                </table>
+                <p>En mode <strong>overlay/copy</strong>, le redémarrage réutilise les disques existants (les données sont conservées).</p>
 
                 <h4>Les 3 backends</h4>
                 <table class="help-table">
@@ -356,14 +368,8 @@ VM1 (10.0.2.15)         VM2 (10.0.2.15)
                     <li><strong>Accès SSH</strong> : <code>ssh debian@localhost -p 2222</code> (port = base SSH + index VM)</li>
                 </ul>
 
-                <h4>Scripts bash</h4>
-                <p>L'interface web génère les mêmes commandes que les scripts en ligne de commande :</p>
-                <ul>
-                    <li><code>./fwcfg.sh --count 3 --ram 512 image.qcow2</code></li>
-                    <li><code>./cloudinit.sh --count 2 --password debian image.qcow2</code></li>
-                    <li><code>./vwifi.sh --count 2 --wlan-count 1 image.qcow2</code></li>
-                    <li><code>./cloudinit.sh --stop</code> — arrête le lab</li>
-                </ul>
+                <h4>Scripts générés</h4>
+                <p>L'interface web génère ses propres scripts de lancement dans <code>/tmp/vde/</code> (indépendant des scripts bash du projet).</p>
                 <p>La commande CLI équivalente est visible en bas de l'interface (pied de page).</p>
 
                 <h4>Fichiers générés</h4>

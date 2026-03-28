@@ -88,6 +88,11 @@ body {
     color: var(--bg-primary);
 }
 
+.badge-stopped {
+    background: var(--accent-orange);
+    color: var(--bg-primary);
+}
+
 /* Boutons */
 .btn {
     padding: 6px 16px;
@@ -120,6 +125,24 @@ body {
 
 .btn-stop:hover:not(:disabled) {
     background: var(--accent-red-hover);
+}
+
+.btn-restart {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.btn-restart:hover:not(:disabled) {
+    background: var(--accent-blue-hover);
+}
+
+.btn-clean {
+    background: var(--accent-orange);
+    color: var(--bg-primary);
+}
+
+.btn-clean:hover:not(:disabled) {
+    background: #dd6b20;
 }
 
 .btn-small {

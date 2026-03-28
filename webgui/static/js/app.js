@@ -37,6 +37,8 @@
     let outputContent;
     let btnLaunch;
     let btnStop;
+    let btnRestart;
+    let btnClean;
     let statusBadge;
 
     // Drag state
@@ -50,6 +52,8 @@
         outputContent = document.getElementById("output-content");
         btnLaunch = document.getElementById("btn-launch");
         btnStop = document.getElementById("btn-stop");
+        btnRestart = document.getElementById("btn-restart");
+        btnClean = document.getElementById("btn-clean");
         statusBadge = document.getElementById("status-badge");
 
         setupDragAndDrop();
@@ -68,6 +72,7 @@
         setInterval(fetchMemory, 30000);
 
         updateAll();
+        checkInitialStatus();
     });
 
     // --- Drag and Drop ---
@@ -516,6 +521,8 @@
     function setupButtons() {
         btnLaunch.addEventListener("click", launchLab);
         btnStop.addEventListener("click", stopLab);
+        btnRestart.addEventListener("click", restartLab);
+        btnClean.addEventListener("click", cleanLab);
     }
 
     // --- Output toggle ---
@@ -757,6 +764,8 @@
 
         btnLaunch.disabled = true;
         btnStop.disabled = false;
+        btnRestart.disabled = true;
+        btnClean.disabled = true;
         state.labRunning = true;
         state.outputOffset = 0;
         outputContent.textContent = "";
@@ -775,7 +784,7 @@
             const data = await resp.json();
             if (!resp.ok) {
                 alert(data.error || "Erreur lors du lancement.");
-                resetLabState();
+                setLabIdle();
                 return;
             }
             outputContent.textContent += `$ ${data.command}\n`;
@@ -788,29 +797,114 @@
 
     async function stopLab() {
         btnStop.disabled = true;
-        const backend = Config.getSelectedBackend();
         try {
             const resp = await fetch("/api/stop", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ backend }),
             });
             const data = await resp.json();
-            if (data.output) {
-                outputContent.textContent += data.output + "\n";
+            if (data.message) {
+                outputContent.textContent += `[INFO] ${data.message}\n`;
             }
         } catch (err) {
             outputContent.textContent += `[ERREUR] ${err.message}\n`;
         }
-        resetLabState();
+        setLabStopped(true);
     }
 
-    function resetLabState() {
+    async function restartLab() {
+        btnRestart.disabled = true;
+        btnClean.disabled = true;
+        btnLaunch.disabled = true;
+        state.labRunning = true;
+        setStatus("running");
+
+        // Deplier le panel output
+        document.getElementById("output-panel").classList.remove("collapsed");
+        document.getElementById("btn-toggle-output").textContent = "Replier";
+
+        try {
+            const resp = await fetch("/api/restart", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                outputContent.textContent += `[ERREUR] ${data.error || "Echec du redemarrage."}\n`;
+                // Retour a l'etat stopped
+                setLabStopped(true);
+                return;
+            }
+            outputContent.textContent += `[INFO] ${data.message}\n`;
+            startPolling();
+        } catch (err) {
+            outputContent.textContent += `[ERREUR] ${err.message}\n`;
+            setLabStopped(true);
+        }
+    }
+
+    async function cleanLab() {
+        if (!confirm("Supprimer /tmp/vde/ et tout l'etat du lab ?")) return;
+        btnClean.disabled = true;
+        btnRestart.disabled = true;
+        try {
+            const resp = await fetch("/api/clean", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            const data = await resp.json();
+            if (data.message) {
+                outputContent.textContent += `[INFO] ${data.message}\n`;
+            }
+        } catch (err) {
+            outputContent.textContent += `[ERREUR] ${err.message}\n`;
+        }
+        setLabIdle();
+    }
+
+    function setLabStopped(hasPreservedState) {
+        state.labRunning = false;
+        stopPolling();
+        if (hasPreservedState) {
+            btnLaunch.disabled = false;
+            btnStop.disabled = true;
+            btnRestart.disabled = false;
+            btnClean.disabled = false;
+            setStatus("stopped");
+        } else {
+            setLabIdle();
+        }
+    }
+
+    function setLabIdle() {
         state.labRunning = false;
         btnLaunch.disabled = false;
         btnStop.disabled = true;
+        btnRestart.disabled = true;
+        btnClean.disabled = true;
         setStatus("idle");
         stopPolling();
+    }
+
+    function checkInitialStatus() {
+        fetch("/api/status")
+            .then(r => r.json())
+            .then(data => {
+                if (data.running) {
+                    state.labRunning = true;
+                    btnLaunch.disabled = true;
+                    btnStop.disabled = false;
+                    btnRestart.disabled = true;
+                    btnClean.disabled = true;
+                    setStatus("running");
+                    startPolling();
+                } else if (data.has_preserved_state) {
+                    setLabStopped(true);
+                } else {
+                    setLabIdle();
+                }
+            })
+            .catch(() => {});
     }
 
     function setStatus(status) {
@@ -818,6 +912,9 @@
         if (status === "running") {
             statusBadge.classList.add("badge-running");
             statusBadge.textContent = "Running";
+        } else if (status === "stopped") {
+            statusBadge.classList.add("badge-stopped");
+            statusBadge.textContent = "Stopped";
         } else {
             statusBadge.classList.add("badge-idle");
             statusBadge.textContent = "Idle";
@@ -851,8 +948,8 @@
                 // Auto-scroll
                 outputContent.scrollTop = outputContent.scrollHeight;
             }
-            if (!data.running) {
-                resetLabState();
+            if (!data.running && state.labRunning) {
+                setLabStopped(data.has_preserved_state);
             }
         } catch {
             // Ignorer les erreurs reseau transitoires

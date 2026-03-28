@@ -2,7 +2,10 @@
 """Serveur Flask pour l'interface web qemu_marionum."""
 
 import os
+import json
+import shutil
 import subprocess
+import signal
 import threading
 import time
 import glob as globmod
@@ -21,6 +24,59 @@ lab_state = {
     "output_lines": [],
     "lock": threading.Lock(),
 }
+
+
+# --- Helpers gestion de processus ---
+
+def _pkill(pattern, sig=signal.SIGTERM):
+    """Wrapper pkill -f avec gestion d'erreurs."""
+    try:
+        sig_num = str(sig.value) if hasattr(sig, "value") else str(sig)
+        subprocess.run(
+            ["pkill", f"-{sig_num}", "-f", pattern],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        pass
+
+
+def stop_processes():
+    """Tue tous les processus du lab sans supprimer /tmp/vde/."""
+    # 1. Lire PIDs du fichier
+    pids_file = "/tmp/vde/vm_pids.txt"
+    if os.path.exists(pids_file):
+        with open(pids_file) as f:
+            for line in f:
+                pid = line.strip()
+                if pid:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                    except (ProcessLookupError, ValueError, PermissionError):
+                        pass
+
+    # 2. pkill les processus principaux
+    for pattern in [
+        "qemu-system-x86_64",
+        "vdecapture",
+        "vde_switch.*/tmp/vde/switch",
+    ]:
+        try:
+            subprocess.run(
+                ["pkill", "-f", pattern],
+                capture_output=True, text=True, timeout=5,
+            )
+        except Exception:
+            pass
+
+    # 3. Attendre un peu + SIGKILL QEMU restants
+    time.sleep(0.5)
+    try:
+        subprocess.run(
+            ["pkill", "-9", "-f", "qemu-system-x86_64"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        pass
 
 
 # --- Routes ---
@@ -79,6 +135,12 @@ def api_launch():
             return jsonify({"error": "Un lab est deja en cours."}), 409
 
     params = request.get_json(force=True)
+
+    # Nettoyer l'ancien etat si present
+    if os.path.exists("/tmp/vde"):
+        stop_processes()
+        shutil.rmtree("/tmp/vde", ignore_errors=True)
+
     cmd = build_command(params)
     if not cmd:
         return jsonify({"error": "Parametres invalides."}), 400
@@ -118,36 +180,131 @@ def api_launch():
 
 @app.route("/api/stop", methods=["POST"])
 def api_stop():
-    """Arrete le lab en cours."""
-    params = request.get_json(force=True) if request.data else {}
-    backend = params.get("backend", "fwcfg")
-
-    scripts = {
-        "fwcfg": "./fwcfg.sh",
-        "cloudinit": "./cloudinit.sh",
-        "vwifi": "./vwifi.sh",
-    }
-    script = scripts.get(backend, "./fwcfg.sh")
-
+    """Arrete le lab en cours (preserve l'etat dans /tmp/vde/)."""
     # Tuer le processus en cours s'il existe
     with lab_state["lock"]:
         if lab_state["process"] and lab_state["process"].poll() is None:
             lab_state["process"].terminate()
 
     try:
-        result = subprocess.run(
-            ["bash", script, "--stop"],
-            capture_output=True, text=True,
-            cwd=PROJECT_ROOT,
-            timeout=15,
-        )
+        stop_processes()
         with lab_state["lock"]:
             lab_state["running"] = False
             lab_state["process"] = None
-            lab_state["output_lines"].append("[INFO] Lab arrete.")
-        return jsonify({"ok": True, "output": result.stdout + result.stderr})
+            lab_state["output_lines"].append("[INFO] Lab arrete (etat preserve dans /tmp/vde/).")
+        return jsonify({"ok": True, "message": "Lab arrete (etat preserve dans /tmp/vde/)."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/clean", methods=["POST"])
+def api_clean():
+    """Arrete le lab et supprime /tmp/vde/."""
+    # Tuer le processus en cours s'il existe
+    with lab_state["lock"]:
+        if lab_state["process"] and lab_state["process"].poll() is None:
+            lab_state["process"].terminate()
+
+    try:
+        stop_processes()
+        if os.path.exists("/tmp/vde"):
+            shutil.rmtree("/tmp/vde")
+        with lab_state["lock"]:
+            lab_state["running"] = False
+            lab_state["process"] = None
+            lab_state["output_lines"] = []
+        return jsonify({"ok": True, "message": "Lab nettoye."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/restart", methods=["POST"])
+def api_restart():
+    """Redemarre le lab depuis l'etat preserve dans /tmp/vde/."""
+    params_file = "/tmp/vde/params.json"
+    if not os.path.exists(params_file):
+        return jsonify({"error": "Aucun etat preserve (params.json introuvable)."}), 404
+
+    with lab_state["lock"]:
+        if lab_state["running"]:
+            return jsonify({"error": "Un lab est deja en cours."}), 409
+        lab_state["running"] = True
+        lab_state["output_lines"].append("[INFO] Redemarrage du lab...")
+
+    def run_restart():
+        try:
+            with open(params_file) as f:
+                params = json.load(f)
+
+            hub_flag = "--hub" if params.get("hub") else ""
+
+            # Supprimer l'ancien socket VDE s'il existe
+            vde_ctl = "/tmp/vde/switch/ctl"
+            if os.path.exists(vde_ctl):
+                try:
+                    subprocess.run(
+                        ["pkill", "-f", "vde_switch.*/tmp/vde/switch"],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    time.sleep(0.5)
+                except Exception:
+                    pass
+                # Nettoyer le dossier socket
+                switch_dir = "/tmp/vde/switch"
+                if os.path.exists(switch_dir):
+                    shutil.rmtree(switch_dir)
+
+            # Recreer le switch VDE
+            vde_cmd = f'vde_switch -s /tmp/vde/switch -m 777 -M /tmp/vde/mgmt {hub_flag} -d'
+            subprocess.run(vde_cmd, shell=True, capture_output=True, text=True, timeout=10)
+            time.sleep(1)
+
+            if not os.path.exists("/tmp/vde/switch/ctl"):
+                with lab_state["lock"]:
+                    lab_state["output_lines"].append("[ERREUR] Socket VDE non cree.")
+                    lab_state["running"] = False
+                return
+
+            with lab_state["lock"]:
+                lab_state["output_lines"].append("[INFO] Switch VDE recree.")
+
+            # Trouver et lancer les scripts xterm
+            xterm_scripts = sorted(globmod.glob("/tmp/vde/vm*-xterm.sh"))
+            pids = []
+            for script in xterm_scripts:
+                try:
+                    proc = subprocess.Popen(
+                        ["bash", script],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    pids.append(str(proc.pid))
+                    vm_name = os.path.basename(script).replace("-xterm.sh", "").upper()
+                    with lab_state["lock"]:
+                        lab_state["output_lines"].append(f"[INFO] {vm_name} redemarree.")
+                except Exception as e:
+                    with lab_state["lock"]:
+                        lab_state["output_lines"].append(f"[ERREUR] {script}: {e}")
+
+            # Mettre a jour vm_pids.txt
+            if pids:
+                with open("/tmp/vde/vm_pids.txt", "w") as f:
+                    f.write("\n".join(pids) + "\n")
+
+            with lab_state["lock"]:
+                lab_state["output_lines"].append(
+                    f"[INFO] Lab redemarre — {len(pids)} VM(s) lancee(s)."
+                )
+
+        except Exception as e:
+            with lab_state["lock"]:
+                lab_state["output_lines"].append(f"[ERREUR] Redemarrage: {e}")
+                lab_state["running"] = False
+
+    t = threading.Thread(target=run_restart, daemon=True)
+    t.start()
+
+    return jsonify({"ok": True, "message": "Redemarrage en cours..."})
 
 
 @app.route("/api/status")
@@ -159,12 +316,14 @@ def api_status():
     if os.path.exists(pids_file):
         with open(pids_file) as f:
             vm_count = sum(1 for line in f if line.strip())
+    has_preserved_state = os.path.exists("/tmp/vde/params.json")
     with lab_state["lock"]:
         return jsonify({
             "running": lab_state["running"],
             "vde_active": vde_running,
             "vm_count": vm_count,
             "output_total": len(lab_state["output_lines"]),
+            "has_preserved_state": has_preserved_state,
         })
 
 
@@ -523,101 +682,20 @@ def api_output():
 # --- Construction de commande ---
 
 def build_command(params):
-    """Construit la liste d'arguments CLI a partir des parametres JSON.
+    """Construit la commande de lancement via launcher.py.
 
-    Si la cle 'vms' est presente (config per-VM), genere un script via
-    launcher.py au lieu d'appeler directement le backend.
+    Toujours utilise le generateur de scripts (plus de dependance aux
+    scripts bash externes).
     """
-    backend = params.get("backend", "fwcfg")
-    disk = params.get("disk", "")
-    if not disk:
+    if not params.get("disk"):
         return None
 
-    # Per-VM : generer un script de lancement
-    if "vms" in params:
-        return generate_launcher(params)
+    # Creer la liste de VMs si absente (mode simple sans per-VM)
+    if "vms" not in params:
+        count = int(params.get("count", 2))
+        params["vms"] = [{"id": str(i + 1)} for i in range(count)]
 
-    scripts = {
-        "fwcfg": "./fwcfg.sh",
-        "cloudinit": "./cloudinit.sh",
-        "vwifi": "./vwifi.sh",
-    }
-    script = scripts.get(backend)
-    if not script:
-        return None
-
-    cmd = ["bash", script]
-
-    # Options communes
-    count = params.get("count", 2)
-    cmd += ["--count", str(count)]
-
-    ram = params.get("ram")
-    if ram:
-        cmd += ["--ram", str(ram)]
-
-    cpu = params.get("cpu")
-    if cpu:
-        cmd += ["--cpu", str(cpu)]
-
-    vde_net = params.get("vde_net")
-    if vde_net:
-        cmd += ["--vde-net", vde_net]
-
-    base_ip = params.get("base_ip")
-    if base_ip:
-        cmd += ["--base-ip", str(base_ip)]
-
-    base_ssh = params.get("base_ssh")
-    if base_ssh:
-        cmd += ["--base-ssh", str(base_ssh)]
-
-    disk_mode = params.get("disk_mode", "snapshot")
-    cmd += ["--disk-mode", disk_mode]
-
-    if params.get("no_nat"):
-        cmd.append("--no-nat")
-
-    if params.get("hub"):
-        cmd.append("--hub")
-
-    if params.get("mirror"):
-        cmd.append("--mirror")
-
-    pkg_list = params.get("pkg_list")
-    if pkg_list:
-        cmd += ["--pkg-list", pkg_list]
-
-    # Options specifiques fwcfg
-    if backend == "fwcfg":
-        net_script = params.get("net_script")
-        if net_script:
-            cmd += ["--net-script", net_script]
-
-    # Options specifiques cloudinit
-    if backend in ("cloudinit", "vwifi"):
-        password = params.get("password")
-        if password:
-            cmd += ["--password", password]
-
-        ssh_key = params.get("ssh_key")
-        if ssh_key:
-            cmd += ["--ssh-key", ssh_key]
-
-        seeds_dir = params.get("seeds_dir")
-        if seeds_dir:
-            cmd += ["--seeds-dir", seeds_dir]
-
-    # Options specifiques vwifi
-    if backend == "vwifi":
-        wlan_count = params.get("wlan_count")
-        if wlan_count:
-            cmd += ["--wlan-count", str(wlan_count)]
-
-    # Disque en dernier argument
-    cmd.append(disk)
-
-    return cmd
+    return generate_launcher(params)
 
 
 if __name__ == "__main__":

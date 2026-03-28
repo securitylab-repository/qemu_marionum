@@ -7,6 +7,7 @@ replique la logique des scripts existants (fwcfg.sh, cloudinit.sh) mais avec
 des parametres par VM.
 """
 
+import json
 import os
 import stat
 
@@ -80,6 +81,10 @@ def generate_launcher(params):
     with open(LAUNCH_SCRIPT, "w") as f:
         f.write(script_content)
     os.chmod(LAUNCH_SCRIPT, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+
+    # Sauvegarder les parametres pour restart
+    with open("/tmp/vde/params.json", "w") as f:
+        json.dump(params, f, indent=2)
 
     return ["bash", LAUNCH_SCRIPT]
 
@@ -193,11 +198,9 @@ VM_INFO=()"""
 def _vde_setup_block(g):
     hub_flag = " --hub" if g["hub"] else ""
     return f"""
-section "Nettoyage"
+section "Preparation"
 pkill -f "vde_switch.*$VDE_SOCKET" 2>/dev/null && {{ info "Ancien vde_switch arrete"; sleep 1; }} || true
-rm -rf /tmp/vde
 mkdir -p /tmp/vde "{g['seeds_dir']}"
-info "/tmp/vde nettoye"
 
 section "Switch VDE"
 vde_switch -s "$VDE_SOCKET" -m 777 -M "$VDE_MGMT"{hub_flag} -d
@@ -522,7 +525,7 @@ for info_line in "${{VM_INFO[@]}}"; do
 done
 
 echo ""
-echo "  Arret : ./fwcfg.sh --stop  (ou ./cloudinit.sh --stop)"
+echo "  Arret : via l'interface web (bouton Stopper/Nettoyer)"
 echo "=================================================================="
 
 printf "%s\\n" "${{PIDS[@]}}" > /tmp/vde/vm_pids.txt
