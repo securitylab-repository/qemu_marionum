@@ -24,6 +24,7 @@
         vdeNet: "192.168.100.0/24",
         baseIP: 10,
         labRunning: false,
+        hasPreservedState: false,
         outputOffset: 0,
         pollTimer: null,
         switchPos: { x: null, y: null },
@@ -333,7 +334,7 @@
             startItem.setAttribute("data-disabled", "true");
             stopItem.setAttribute("data-disabled", "true");
 
-            if (!state.labRunning) return;
+            if (!state.labRunning && !state.hasPreservedState) return;
 
             // Resoudre l'identifiant pour l'API
             const apiId = (contextVmId === "server")
@@ -389,6 +390,17 @@
                         outputContent.textContent += `[ERREUR] ${err.message}\n`;
                     });
             } else if (action === "start") {
+                // Si on etait en etat stopped, passer en running
+                if (state.hasPreservedState && !state.labRunning) {
+                    state.labRunning = true;
+                    state.hasPreservedState = false;
+                    btnLaunch.disabled = true;
+                    btnStop.disabled = false;
+                    btnRestart.disabled = true;
+                    btnClean.disabled = true;
+                    setStatus("running");
+                }
+
                 if (isServer) {
                     // Serveur : demarrage direct (pas de launch-single)
                     fetch("/api/vm/start", {
@@ -791,7 +803,7 @@
             startPolling();
         } catch (err) {
             alert("Erreur reseau : " + err.message);
-            resetLabState();
+            setLabIdle();
         }
     }
 
@@ -816,7 +828,9 @@
         btnRestart.disabled = true;
         btnClean.disabled = true;
         btnLaunch.disabled = true;
+        btnStop.disabled = false;
         state.labRunning = true;
+        state.hasPreservedState = false;
         setStatus("running");
 
         // Deplier le panel output
@@ -864,6 +878,7 @@
 
     function setLabStopped(hasPreservedState) {
         state.labRunning = false;
+        state.hasPreservedState = !!hasPreservedState;
         stopPolling();
         if (hasPreservedState) {
             btnLaunch.disabled = false;
@@ -878,6 +893,7 @@
 
     function setLabIdle() {
         state.labRunning = false;
+        state.hasPreservedState = false;
         btnLaunch.disabled = false;
         btnStop.disabled = true;
         btnRestart.disabled = true;

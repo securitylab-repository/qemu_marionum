@@ -384,6 +384,25 @@ def api_vm_start():
     if not os.path.exists(xterm_script):
         return jsonify({"error": f"Script {xterm_script} introuvable. Lancez le lab d'abord."}), 404
 
+    # Recreer le switch VDE si necessaire (apres un stop global)
+    if not os.path.exists("/tmp/vde/switch/ctl"):
+        params_file = "/tmp/vde/params.json"
+        if os.path.exists(params_file):
+            try:
+                with open(params_file) as f:
+                    saved_params = json.load(f)
+                hub_flag = "--hub" if saved_params.get("hub") else ""
+                switch_dir = "/tmp/vde/switch"
+                if os.path.exists(switch_dir):
+                    shutil.rmtree(switch_dir)
+                vde_cmd = f'vde_switch -s /tmp/vde/switch -m 777 -M /tmp/vde/mgmt {hub_flag} -d'
+                subprocess.run(vde_cmd, shell=True, capture_output=True, text=True, timeout=10)
+                time.sleep(1)
+            except Exception:
+                pass
+        if not os.path.exists("/tmp/vde/switch/ctl"):
+            return jsonify({"error": "Le switch VDE n'est pas actif. Lancez ou redemarrez le lab d'abord."}), 400
+
     # Verifier si deja running
     try:
         result = subprocess.run(
