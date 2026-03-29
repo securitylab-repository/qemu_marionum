@@ -363,9 +363,15 @@ body {
     pointer-events: none;
 }
 
+/* Bouton supprimer serveur */
+.srv-delete { cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.vwifi-server-node:hover .srv-delete { opacity: 1; }
+.srv-delete circle { fill: var(--accent-red); }
+.srv-delete text { fill: #fff; font-size: 12px; font-weight: 700; }
+
 /* Serveur vwifi */
 .vwifi-server-node {
-    cursor: pointer;
+    cursor: grab;
 }
 
 .vwifi-server-node rect {

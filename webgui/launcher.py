@@ -24,14 +24,13 @@ VWIFI_SERVER_SSH_OFFSET = 100
 
 def generate_launcher(params):
     """Genere le script de lancement per-VM et retourne la commande a executer."""
-    backend = params.get("backend", "cloudinit")
     vms = params.get("vms", [])
     if not vms:
         return None
 
     g = {
         "disk": params.get("disk", ""),
-        "ram": params.get("ram", 1024 if backend != "fwcfg" else 512),
+        "ram": params.get("ram", 1024),
         "cpu": params.get("cpu", 2),
         "disk_mode": params.get("disk_mode", "snapshot"),
         "vde_net": params.get("vde_net", "192.168.100.0/24"),
@@ -48,37 +47,37 @@ def generate_launcher(params):
         "wlan_count": params.get("wlan_count", 1),
     }
 
-    # Config serveur vwifi (optionnelle)
-    server_config = params.get("vwifi_server", {})
+    # Serveur explicite (optionnel)
+    server = params.get("server")
 
     lines = []
     lines.append(_preamble(g))
     lines.append(_vde_setup_block(g))
 
     # Generer le script reseau fwcfg si au moins une VM utilise fwcfg
-    any_fwcfg = backend == "fwcfg" or any(
-        vm.get("backend") in ("fwcfg", "fwcfg-vwifi") for vm in vms
+    any_fwcfg = any(
+        vm.get("backend") in ("fwcfg", "vwifi_fwcfg") for vm in vms
     )
+    # Aussi verifier le serveur
+    if server and server.get("backend") == "fwcfg":
+        any_fwcfg = True
     if any_fwcfg:
         lines.append(_fwcfg_net_script_block(g))
 
-    # Detection : au moins une VM utilise vwifi ?
-    any_vwifi = backend == "vwifi" or any(
-        vm.get("backend") in ("vwifi", "fwcfg-vwifi") for vm in vms
-    )
-
-    if any_vwifi:
-        # Backend serveur = herite du global (fwcfg → fwcfg, sinon cloudinit)
-        server_backend = "fwcfg" if backend == "fwcfg" else "cloudinit"
+    # Serveur vwifi (explicite)
+    if server:
+        server_backend = server.get("backend", "cloudinit")
         lines.append('\nsection "vwifi-server"')
-        lines.append(_vwifi_server_launch_block(g, server_backend, server_config))
+        lines.append(_vwifi_server_launch_block(g, server_backend, server))
 
     for i, vm in enumerate(vms):
         vm_num = i + 1
-        vm_backend = vm.get("backend") or backend
+        vm_backend = vm.get("backend", "cloudinit")
+        # RAM par defaut selon le backend de la VM
+        default_ram = 512 if vm_backend in ("fwcfg", "vwifi_fwcfg") else 1024
         resolved = {
             "disk": vm.get("disk") or g["disk"],
-            "ram": vm.get("ram") or g["ram"],
+            "ram": vm.get("ram") or g["ram"] or default_ram,
             "cpu": vm.get("cpu") or g["cpu"],
             "disk_mode": vm.get("disk_mode") or g["disk_mode"],
         }
@@ -91,9 +90,9 @@ def generate_launcher(params):
         lines.append(f'\nsection "VM{vm_num}"')
         lines.append(_disk_prep_block(vm_num, resolved))
 
-        if vm_backend == "vwifi":
+        if vm_backend == "vwifi_cloudinit":
             lines.append(_vwifi_client_seed_block(vm_num, resolved, vm_g))
-        elif vm_backend == "fwcfg-vwifi":
+        elif vm_backend == "vwifi_fwcfg":
             lines.append(_fwcfg_config_block(vm_num, vm_g))
             lines.append(_vwifi_client_fwcfg_block(vm_num, vm_g))
         elif vm_backend == "cloudinit":
@@ -103,7 +102,7 @@ def generate_launcher(params):
 
         lines.append(_qemu_launch_block(vm_num, resolved, g, vm_backend))
 
-    lines.append(_summary_block(vms, g, any_vwifi, server_config))
+    lines.append(_summary_block(vms, g, server is not None, server))
 
     script_content = "\n".join(lines) + "\n"
 
@@ -126,10 +125,9 @@ def generate_single_vm_script(params, vm_config, vm_num):
     et le seed, puis lance la VM.
     Retourne le chemin du script setup.
     """
-    backend = params.get("backend", "cloudinit")
     g = {
         "disk": params.get("disk", ""),
-        "ram": params.get("ram", 1024 if backend != "fwcfg" else 512),
+        "ram": params.get("ram", 1024),
         "cpu": params.get("cpu", 2),
         "disk_mode": params.get("disk_mode", "snapshot"),
         "vde_net": params.get("vde_net", "192.168.100.0/24"),
@@ -146,10 +144,11 @@ def generate_single_vm_script(params, vm_config, vm_num):
         "wlan_count": params.get("wlan_count", 1),
     }
 
-    vm_backend = vm_config.get("backend") or backend
+    vm_backend = vm_config.get("backend", "cloudinit")
+    default_ram = 512 if vm_backend in ("fwcfg", "vwifi_fwcfg") else 1024
     resolved = {
         "disk": vm_config.get("disk") or g["disk"],
-        "ram": vm_config.get("ram") or g["ram"],
+        "ram": vm_config.get("ram") or g["ram"] or default_ram,
         "cpu": vm_config.get("cpu") or g["cpu"],
         "disk_mode": vm_config.get("disk_mode") or g["disk_mode"],
     }
@@ -171,9 +170,9 @@ def generate_single_vm_script(params, vm_config, vm_num):
     lines.append("")
     lines.append(_disk_prep_block(vm_num, resolved))
 
-    if vm_backend == "vwifi":
+    if vm_backend == "vwifi_cloudinit":
         lines.append(_vwifi_client_seed_block(vm_num, resolved, vm_g))
-    elif vm_backend == "fwcfg-vwifi":
+    elif vm_backend == "vwifi_fwcfg":
         lines.append(_fwcfg_config_block(vm_num, vm_g))
         lines.append(_vwifi_client_fwcfg_block(vm_num, vm_g))
     elif vm_backend == "cloudinit":
@@ -468,14 +467,14 @@ def _qemu_launch_block(vm_num, resolved, g, backend):
     seeds_dir = g["seeds_dir"]
     net_script = g.get("net_script") or "/tmp/setup-net.sh"
 
-    if backend in ("cloudinit", "vwifi"):
+    if backend in ("cloudinit", "vwifi_cloudinit"):
         vde_args = f'-netdev vde,id=vde0,sock={vde_socket} -device virtio-net-pci,netdev=vde0,mac={mac_vde},addr=0x4'
         nat_args = ""
         if not g["no_nat"]:
             nat_args = f'-netdev user,id=nat0,hostfwd=tcp::{ssh_port}-:22 -device virtio-net-pci,netdev=nat0,mac={mac_nat},addr=0x5'
         seed_arg = f'-drive file={seeds_dir}/seed-vm{vm_num}.iso,format=raw,if=virtio,readonly=on'
         fw_cfg_args = ""
-    elif backend == "fwcfg-vwifi":
+    elif backend == "vwifi_fwcfg":
         vde_args = f'-netdev vde,id=vde0,sock={vde_socket} -device virtio-net-pci,netdev=vde0,mac={mac_vde}'
         nat_args = ""
         if not g["no_nat"]:
@@ -499,7 +498,7 @@ def _qemu_launch_block(vm_num, resolved, g, backend):
         seed_arg = ""
         fw_cfg_args = f'-fw_cfg name=opt/setup-net.sh,file={net_script} -fw_cfg name=opt/vm-ip,file=/tmp/vde/vm{vm_num}-ip'
 
-    if backend in ("fwcfg", "fwcfg-vwifi"):
+    if backend in ("fwcfg", "vwifi_fwcfg"):
         geometry = "100x25"
         xterm_colors = ""
     else:
@@ -559,7 +558,7 @@ VM_INFO+=("VM{vm_num}|{mac_vde}|{static_ip}|{ssh_port}|$!|{disk_mode}")
 """
 
 
-def _summary_block(vms, g, any_vwifi=False, server_config=None):
+def _summary_block(vms, g, has_server=False, server_config=None):
     count = len(vms)
     vde_prefix = _vde_prefix(g["vde_net"])
     server_ip = f"{vde_prefix}.{VWIFI_SERVER_IP_LAST}"
@@ -568,7 +567,7 @@ def _summary_block(vms, g, any_vwifi=False, server_config=None):
     srv_ssh = g["base_ssh"] + VWIFI_SERVER_SSH_OFFSET
 
     vwifi_summary = ""
-    if any_vwifi:
+    if has_server:
         vwifi_summary = f"""
 echo "  --- vwifi-server ---"
 echo "  IP: {server_ip} | RAM: {srv_ram}MB | CPU: {srv_cpu}$([ "$USE_NAT" = true ] && echo " | SSH: localhost:{srv_ssh}" || echo '')"
@@ -605,7 +604,7 @@ wait
 
 
 def _vwifi_server_seed_block(g, server_config):
-    """Genere le seed cloud-init pour le serveur vwifi (backend cloudinit/vwifi)."""
+    """Genere le seed cloud-init pour le serveur vwifi (backend cloudinit)."""
     vde_prefix = _vde_prefix(g["vde_net"])
     vde_mask = g["vde_net"].split("/")[1] if "/" in g["vde_net"] else "24"
     static_ip = f"{vde_prefix}.{VWIFI_SERVER_IP_LAST}"
@@ -773,10 +772,10 @@ def _vwifi_server_launch_block(g, server_backend, server_config):
     vde_prefix = _vde_prefix(g["vde_net"])
     static_ip = f"{vde_prefix}.{VWIFI_SERVER_IP_LAST}"
     ssh_port = g["base_ssh"] + VWIFI_SERVER_SSH_OFFSET
-    ram = server_config.get("ram") or VWIFI_SERVER_RAM
-    cpu = server_config.get("cpu") or VWIFI_SERVER_CPUS
-    disk = server_config.get("disk") or g["disk"]
-    disk_mode = server_config.get("disk_mode") or g["disk_mode"]
+    ram = (server_config or {}).get("ram") or VWIFI_SERVER_RAM
+    cpu = (server_config or {}).get("cpu") or VWIFI_SERVER_CPUS
+    disk = (server_config or {}).get("disk") or g["disk"]
+    disk_mode = (server_config or {}).get("disk_mode") or g["disk_mode"]
     mac_vde = VWIFI_SERVER_MAC_VDE
     mac_nat = VWIFI_SERVER_MAC_NAT
     seeds_dir = g["seeds_dir"]
@@ -873,7 +872,7 @@ sleep 5
 
 
 def _vwifi_client_seed_block(vm_num, resolved, g):
-    """Genere le seed cloud-init pour un client vwifi (backend vwifi/cloudinit+vwifi)."""
+    """Genere le seed cloud-init pour un client vwifi (backend vwifi_cloudinit)."""
     vde_prefix = _vde_prefix(g["vde_net"])
     vde_mask = g["vde_net"].split("/")[1] if "/" in g["vde_net"] else "24"
     ip_last = g["base_ip"] + vm_num - 1
@@ -1044,7 +1043,7 @@ info "Seed ISO → $SEED_ISO_VM{vm_num} (vwifi-client, {wlan_count} wlan)"
 
 
 def _vwifi_client_fwcfg_block(vm_num, g):
-    """Genere les fichiers fw_cfg vwifi pour un client Alpine (backend fwcfg-vwifi)."""
+    """Genere les fichiers fw_cfg vwifi pour un client Alpine (backend vwifi_fwcfg)."""
     vde_prefix = _vde_prefix(g["vde_net"])
     server_ip = f"{vde_prefix}.{VWIFI_SERVER_IP_LAST}"
     wlan_count = g.get("wlan_count", 1)

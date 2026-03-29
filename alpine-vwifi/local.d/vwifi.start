@@ -9,19 +9,26 @@
 #
 # Copier dans /etc/local.d/vwifi.start sur l'image Alpine
 
+LOG=/var/log/vwifi-boot.log
+
 ROLE_FILE=/sys/firmware/qemu_fw_cfg/by_name/opt/vwifi-role/raw
 [ -f "$ROLE_FILE" ] || exit 0
 
 ROLE=$(cat "$ROLE_FILE" 2>/dev/null | tr -d '[:space:]')
 
+log() { echo "$(date '+%H:%M:%S') $1" | tee -a "$LOG"; }
+
+log "[vwifi] Role detecte : $ROLE"
+
 case "$ROLE" in
   server)
     # Charger mac80211_hwsim sans radio (relay transparent)
-    modprobe mac80211_hwsim radios=0
+    log "[vwifi] Chargement mac80211_hwsim..."
+    modprobe mac80211_hwsim radios=0 2>>"$LOG" || { log "[vwifi] ERREUR modprobe"; exit 1; }
 
     # Lancer vwifi-server en arriere-plan (TCP port 8212)
     nohup vwifi-server -t 8212 > /var/log/vwifi-server.log 2>&1 &
-    echo "[vwifi] Server demarre (PID $!, port 8212)"
+    log "[vwifi] Server demarre (PID $!, port 8212)"
     ;;
 
   client)
@@ -32,8 +39,11 @@ case "$ROLE" in
     WLAN_COUNT=$(cat "$WLAN_FILE" 2>/dev/null | tr -d '[:space:]')
     WLAN_COUNT=${WLAN_COUNT:-1}
 
+    log "[vwifi] Server=$SERVER_IP, WLAN=$WLAN_COUNT"
+
     # Charger mac80211_hwsim
-    modprobe mac80211_hwsim radios=0
+    log "[vwifi] Chargement mac80211_hwsim..."
+    modprobe mac80211_hwsim radios=0 2>>"$LOG" || { log "[vwifi] ERREUR modprobe"; exit 1; }
 
     # Recuperer le numero de VM depuis le hostname ou l'IP
     VM_NUM=$(hostname | grep -o '[0-9]*$')
@@ -41,18 +51,25 @@ case "$ROLE" in
     VM_HEX=$(printf "%02x" "$VM_NUM")
 
     # Creer les interfaces wlan
-    vwifi-add-interfaces "$WLAN_COUNT" "0a:0b:0c:${VM_HEX}:00"
+    log "[vwifi] Creation de $WLAN_COUNT interface(s) wlan..."
+    vwifi-add-interfaces "$WLAN_COUNT" "0a:0b:0c:${VM_HEX}:00" 2>>"$LOG" || { log "[vwifi] ERREUR vwifi-add-interfaces"; exit 1; }
 
     # Attendre que le serveur soit joignable (max 120s)
+    log "[vwifi] Attente du serveur $SERVER_IP:8212..."
     WAITED=0
     while ! nc -z "$SERVER_IP" 8212 2>/dev/null; do
       sleep 2
       WAITED=$((WAITED + 2))
-      [ $WAITED -ge 120 ] && { echo "[vwifi] Serveur non joignable apres 120s"; exit 1; }
+      [ $WAITED -ge 120 ] && { log "[vwifi] ERREUR : serveur non joignable apres 120s"; exit 1; }
     done
+    log "[vwifi] Serveur joignable (${WAITED}s)"
 
     # Lancer vwifi-client en arriere-plan
     nohup vwifi-client "$SERVER_IP" > /var/log/vwifi-client.log 2>&1 &
-    echo "[vwifi] Client demarre (PID $!, server $SERVER_IP, $WLAN_COUNT wlan)"
+    log "[vwifi] Client demarre (PID $!, server $SERVER_IP, $WLAN_COUNT wlan)"
+    ;;
+
+  *)
+    log "[vwifi] Role inconnu : '$ROLE'"
     ;;
 esac

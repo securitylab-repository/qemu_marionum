@@ -708,11 +708,8 @@ def build_command(params):
     """
     if not params.get("disk"):
         return None
-
-    # Creer la liste de VMs si absente (mode simple sans per-VM)
-    if "vms" not in params:
-        count = int(params.get("count", 2))
-        params["vms"] = [{"id": str(i + 1)} for i in range(count)]
+    if not params.get("vms"):
+        return None
 
     return generate_launcher(params)
 

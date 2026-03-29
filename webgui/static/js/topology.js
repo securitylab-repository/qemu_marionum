@@ -108,7 +108,6 @@ const Topology = (() => {
 
         const vms = state.vms || [];
         const vmCount = vms.length;
-        const backend = state.backend || "cloudinit";
         const noNat = state.noNat || false;
         const vdeNet = state.vdeNet || "192.168.100.0/24";
         const baseIP = state.baseIP || 10;
@@ -132,12 +131,18 @@ const Topology = (() => {
         const switchCx = (state.switchPos && state.switchPos.x !== null) ? state.switchPos.x : cx;
         const switchCy = (state.switchPos && state.switchPos.y !== null) ? state.switchPos.y : cy;
 
+        // Position du serveur (avec override)
+        const defaultSrvX = switchCx - SWITCH_W / 2 - VWIFI_W - 30;
+        const defaultSrvY = switchCy;
+        let serverPosition = null;
+
         // Stocker la disposition pour le drag
         lastLayout = {
             switchCenter: { x: switchCx, y: switchCy },
             vmPositions: vmPositions.map(p => ({ x: p.x, y: p.y })),
             defaultSwitch: { x: cx, y: cy },
             defaultVmPositions: defaultVmPositions.map(p => ({ x: p.x, y: p.y })),
+            serverPosition: null,
         };
 
         // --- Switch VDE (centre) ---
@@ -181,17 +186,20 @@ const Topology = (() => {
             canvas.appendChild(gNat);
         }
 
-        // --- Serveur vwifi (a gauche du switch) ---
-        const anyVwifi = backend === "vwifi" ||
-            (vms && vms.some(vm => vm.backend === "vwifi" || vm.backend === "fwcfg-vwifi"));
-        if (anyVwifi) {
-            const srvX = switchCx - SWITCH_W / 2 - VWIFI_W - 30;
-            const srvY = switchCy - VWIFI_H / 2;
+        // --- Serveur vwifi (si state.server existe) ---
+        if (state.server) {
+            const srvCx = (state.server.x !== null && state.server.x !== undefined) ? state.server.x : defaultSrvX + VWIFI_W / 2;
+            const srvCy = (state.server.y !== null && state.server.y !== undefined) ? state.server.y : defaultSrvY;
+            const srvX = srvCx - VWIFI_W / 2;
+            const srvY = srvCy - VWIFI_H / 2;
+
+            serverPosition = { x: srvCx, y: srvCy };
+            lastLayout.serverPosition = serverPosition;
 
             // Ligne switch -> serveur vwifi
             gLines.appendChild(svgEl("line", {
-                x1: switchX, y1: switchCy,
-                x2: srvX + VWIFI_W, y2: switchCy,
+                x1: switchCx, y1: switchCy,
+                x2: srvCx, y2: srvCy,
                 class: "link-line",
             }));
 
@@ -201,7 +209,7 @@ const Topology = (() => {
                 width: VWIFI_W, height: VWIFI_H,
             }));
             const srvText1 = svgEl("text", {
-                x: srvX + VWIFI_W / 2, y: srvY + 18,
+                x: srvCx, y: srvY + 18,
             });
             srvText1.textContent = "vwifi-server";
             gSrv.appendChild(srvText1);
@@ -209,18 +217,30 @@ const Topology = (() => {
             const parts = vdeNet.split("/")[0].split(".");
             const srvIPText = `${parts[0]}.${parts[1]}.${parts[2]}.2`;
             const srvText2 = svgEl("text", {
-                x: srvX + VWIFI_W / 2, y: srvY + 32,
+                x: srvCx, y: srvY + 32,
                 class: "vm-ip",
             });
             srvText2.textContent = srvIPText;
             gSrv.appendChild(srvText2);
 
+            // Bouton supprimer serveur
+            const gDel = svgEl("g", { class: "srv-delete" });
+            gDel.appendChild(svgEl("circle", {
+                cx: srvX + VWIFI_W - 2, cy: srvY + 2,
+                r: 8,
+            }));
+            const delText = svgEl("text", {
+                x: srvX + VWIFI_W - 2, y: srvY + 6,
+                "text-anchor": "middle",
+            });
+            delText.textContent = "\u00d7";
+            gDel.appendChild(delText);
+            gSrv.appendChild(gDel);
+
             canvas.appendChild(gSrv);
         }
 
         // --- VMs ---
-        const globalDisk = document.getElementById("disk-path")?.value?.trim() || "";
-
         vmPositions.forEach((pos, i) => {
             const vm = vms[i];
             const vmX = pos.x - VM_W / 2;
@@ -260,24 +280,24 @@ const Topology = (() => {
             ipText.textContent = ip;
             gVM.appendChild(ipText);
 
-            // Info per-VM (si config differente du global)
-            const hasOverride = vm.disk || vm.ram || vm.cpu || vm.diskMode || vm.backend;
-            if (hasOverride) {
+            // Info per-VM : toujours afficher le backend
+            const infoParts = [];
+            if (vm.backend) {
+                infoParts.push(vm.backend);
+            }
+            if (vm.disk) {
+                const name = vm.disk.split("/").pop();
+                infoParts.push(name.length > 12 ? name.substring(0, 12) + "..." : name);
+            }
+            if (vm.ram) infoParts.push(vm.ram + "M");
+            if (vm.cpu) infoParts.push(vm.cpu + "cpu");
+            if (vm.diskMode) infoParts.push(vm.diskMode);
+
+            if (infoParts.length > 0) {
                 const infoText = svgEl("text", {
                     x: pos.x, y: pos.y + 18,
                     class: "vm-info",
                 });
-                const infoParts = [];
-                if (vm.backend && vm.backend !== backend) {
-                    infoParts.push(vm.backend);
-                }
-                if (vm.disk) {
-                    const name = vm.disk.split("/").pop();
-                    infoParts.push(name.length > 12 ? name.substring(0, 12) + "..." : name);
-                }
-                if (vm.ram) infoParts.push(vm.ram + "M");
-                if (vm.cpu) infoParts.push(vm.cpu + "cpu");
-                if (vm.diskMode) infoParts.push(vm.diskMode);
                 infoText.textContent = infoParts.join(" | ");
                 gVM.appendChild(infoText);
             }
@@ -305,7 +325,7 @@ const Topology = (() => {
         // Masquer/afficher le hint
         const hint = document.getElementById("canvas-hint");
         if (hint) {
-            hint.classList.toggle("hidden", vmCount > 0);
+            hint.classList.toggle("hidden", vmCount > 0 || !!state.server);
         }
     }
 

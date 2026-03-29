@@ -43,6 +43,17 @@
                 <span>+ VM</span>
             </div>
             <button id="btn-remove-vm" class="btn btn-small btn-danger" title="Retirer la derniere VM">- VM</button>
+            <div id="srv-icon" class="palette-item" draggable="true"
+                 title="Glisser sur le canvas pour ajouter un vwifi-server">
+                <svg viewBox="0 0 40 40" width="40" height="40">
+                    <rect x="5" y="8" width="30" height="24" rx="3" fill="#805ad5" stroke="#b794f4" stroke-width="1.5"/>
+                    <line x1="10" y1="16" x2="30" y2="16" stroke="#b794f4" stroke-width="1"/>
+                    <circle cx="27" cy="12" r="2" fill="#48bb78"/>
+                    <line x1="10" y1="22" x2="30" y2="22" stroke="#b794f4" stroke-width="1"/>
+                    <circle cx="27" cy="28" r="2" fill="#48bb78"/>
+                </svg>
+                <span>+ Serveur</span>
+            </div>
         </aside>
 
         <!-- Canvas SVG central -->
@@ -66,11 +77,10 @@
                 <div class="form-row">
                     <label for="vm-opt-backend">Backend</label>
                     <select id="vm-opt-backend">
-                        <option value="">(global)</option>
+                        <option value="cloudinit" selected>Debian (cloud-init)</option>
                         <option value="fwcfg">Alpine (fw_cfg)</option>
-                        <option value="cloudinit">Debian (cloud-init)</option>
-                        <option value="vwifi">Debian (vwifi)</option>
-                        <option value="fwcfg-vwifi">Alpine (fw_cfg + vwifi)</option>
+                        <option value="vwifi_cloudinit">Debian (vwifi)</option>
+                        <option value="vwifi_fwcfg">Alpine (fw_cfg + vwifi)</option>
                     </select>
                 </div>
                 <div class="form-row">
@@ -112,6 +122,13 @@
                     <h4 id="vwifi-server-title">vwifi-server</h4>
                 </div>
                 <div class="form-row">
+                    <label for="srv-opt-backend">Backend</label>
+                    <select id="srv-opt-backend">
+                        <option value="cloudinit" selected>Debian (cloud-init)</option>
+                        <option value="fwcfg">Alpine (fw_cfg)</option>
+                    </select>
+                </div>
+                <div class="form-row">
                     <label for="srv-opt-ram">RAM (MB)</label>
                     <input type="number" id="srv-opt-ram" placeholder="512" min="256">
                 </div>
@@ -134,14 +151,6 @@
                     </select>
                 </div>
             </div>
-
-            <!-- Backend -->
-            <fieldset>
-                <legend>Backend</legend>
-                <label><input type="radio" name="backend" value="fwcfg"> Alpine (fw_cfg)</label>
-                <label><input type="radio" name="backend" value="cloudinit" checked> Debian (cloud-init)</label>
-                <label><input type="radio" name="backend" value="vwifi"> Debian (vwifi)</label>
-            </fieldset>
 
             <!-- Disque -->
             <fieldset id="fieldset-disk">
@@ -201,18 +210,9 @@
                 </div>
             </fieldset>
 
-            <!-- Options specifiques fwcfg -->
-            <fieldset id="opts-fwcfg" class="backend-opts" style="display:none;">
-                <legend>Options fw_cfg</legend>
-                <div class="form-row">
-                    <label for="opt-net-script">Script reseau</label>
-                    <input type="text" id="opt-net-script" placeholder="/tmp/setup-net.sh">
-                </div>
-            </fieldset>
-
-            <!-- Options specifiques cloudinit -->
-            <fieldset id="opts-cloudinit" class="backend-opts">
-                <legend>Options cloud-init</legend>
+            <!-- Options backend -->
+            <fieldset id="opts-backend">
+                <legend>Options backend</legend>
                 <div class="form-row">
                     <label for="opt-password">Mot de passe</label>
                     <input type="text" id="opt-password" value="debian">
@@ -222,28 +222,15 @@
                     <input type="text" id="opt-ssh-key" placeholder="~/.ssh/id_ed25519.pub">
                 </div>
                 <div class="form-row">
-                    <label for="opt-seeds-dir">Repertoire seeds</label>
+                    <label for="opt-seeds-dir">Rep. seeds</label>
                     <input type="text" id="opt-seeds-dir" placeholder="/tmp/vde/seeds">
                 </div>
-            </fieldset>
-
-            <!-- Options specifiques vwifi -->
-            <fieldset id="opts-vwifi" class="backend-opts" style="display:none;">
-                <legend>Options vwifi</legend>
                 <div class="form-row">
-                    <label for="opt-password-vwifi">Mot de passe</label>
-                    <input type="text" id="opt-password-vwifi" value="debian">
+                    <label for="opt-net-script">Script reseau</label>
+                    <input type="text" id="opt-net-script" placeholder="/tmp/setup-net.sh">
                 </div>
                 <div class="form-row">
-                    <label for="opt-ssh-key-vwifi">Cle SSH pub</label>
-                    <input type="text" id="opt-ssh-key-vwifi" placeholder="~/.ssh/id_ed25519.pub">
-                </div>
-                <div class="form-row">
-                    <label for="opt-seeds-dir-vwifi">Repertoire seeds</label>
-                    <input type="text" id="opt-seeds-dir-vwifi" placeholder="/tmp/vde/seeds">
-                </div>
-                <div class="form-row">
-                    <label for="opt-wlan-count">Interfaces WLAN</label>
+                    <label for="opt-wlan-count">WLAN (defaut)</label>
                     <input type="number" id="opt-wlan-count" value="1" min="1" max="4">
                 </div>
             </fieldset>
@@ -316,8 +303,9 @@
                 <h4>Démarrage rapide</h4>
                 <ol>
                     <li><strong>Sélectionnez une image disque</strong> — champ obligatoire (bouton "Parcourir..." pour naviguer dans le système de fichiers)</li>
-                    <li><strong>Choisissez un backend</strong> — Alpine (fw_cfg), Debian (cloud-init), ou Debian (vwifi)</li>
                     <li><strong>Ajoutez des VMs</strong> — glissez l'icône "+ VM" depuis la palette sur le canvas</li>
+                    <li><strong>Choisissez un backend par VM</strong> — cliquez sur une VM pour configurer son backend (Debian, Alpine, vwifi...)</li>
+                    <li><strong>Ajoutez un serveur vwifi</strong> (optionnel) — glissez l'icône "+ Serveur" si vous utilisez un backend vwifi</li>
                     <li><strong>Cliquez "Lancer"</strong> — démarre le switch VDE + toutes les VMs. Chaque VM s'ouvre dans un xterm</li>
                     <li><strong>Cliquez "Stopper"</strong> — arrête les processus (l'état est préservé dans /tmp/vde/)</li>
                 </ol>
@@ -332,7 +320,7 @@
                 </table>
                 <p>En mode <strong>overlay/copy</strong>, le redémarrage réutilise les disques existants (les données sont conservées).</p>
 
-                <h4>Les 3 backends</h4>
+                <h4>Les 4 backends</h4>
                 <table class="help-table">
                     <tr><th>Backend</th><th>OS</th><th>Configuration</th><th>Usage</th></tr>
                     <tr>
@@ -348,13 +336,19 @@
                         <td>VMs Debian standard, SSH, paquets apt</td>
                     </tr>
                     <tr>
-                        <td><strong>vwifi</strong></td>
+                        <td><strong>vwifi (Debian)</strong></td>
                         <td>Debian</td>
                         <td>Comme cloud-init + simulation WiFi (mac80211_hwsim)</td>
                         <td>Labs WiFi : hostapd, wpa_supplicant, iw</td>
                     </tr>
+                    <tr>
+                        <td><strong>vwifi (Alpine)</strong></td>
+                        <td>Alpine Linux</td>
+                        <td>Comme fw_cfg + simulation WiFi (mac80211_hwsim)</td>
+                        <td>Labs WiFi légers avec Alpine</td>
+                    </tr>
                 </table>
-                <p>En mode <strong>vwifi</strong>, une VM serveur (vwifi-server) est automatiquement déployée en plus des VMs clientes.</p>
+                <p>Le serveur vwifi doit être ajouté explicitement depuis la palette (icône "+ Serveur"). Chaque VM choisit son propre backend.</p>
 
                 <h4>Modes disque</h4>
                 <table class="help-table">

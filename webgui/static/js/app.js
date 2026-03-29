@@ -12,14 +12,11 @@
 
     // Etat de l'application
     const state = {
-        vms: [
-            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, wlanCount: null, x: null, y: null },
-            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, wlanCount: null, x: null, y: null },
-        ],
+        vms: [],
+        server: null,       // null ou { backend, disk, ram, cpu, diskMode, x, y }
         selectedVmId: null,
         selectedServerPanel: false,
-        nextVmId: 3,
-        backend: "cloudinit",
+        nextVmId: 1,
         noNat: false,
         hub: false,
         vdeNet: "192.168.100.0/24",
@@ -31,7 +28,6 @@
         switchPos: { x: null, y: null },
         availableRam: null,
         availableSwap: null,
-        vwifiServer: { ram: null, cpu: null, disk: null, diskMode: null },
     };
 
     // Elements du DOM
@@ -60,7 +56,6 @@
         statusBadge = document.getElementById("status-badge");
 
         setupDragAndDrop();
-        setupBackendRadios();
         setupFormListeners();
         setupVmFormListeners();
         setupServerFormListeners();
@@ -83,10 +78,16 @@
 
     function setupDragAndDrop() {
         const pcIcon = document.getElementById("pc-icon");
+        const srvIcon = document.getElementById("srv-icon");
         const container = document.getElementById("canvas-container");
 
         pcIcon.addEventListener("dragstart", (e) => {
             e.dataTransfer.setData("text/plain", "vm");
+            e.dataTransfer.effectAllowed = "copy";
+        });
+
+        srvIcon.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/plain", "server");
             e.dataTransfer.effectAllowed = "copy";
         });
 
@@ -103,8 +104,11 @@
         container.addEventListener("drop", (e) => {
             e.preventDefault();
             container.classList.remove("drag-over");
-            if (e.dataTransfer.getData("text/plain") === "vm") {
+            const data = e.dataTransfer.getData("text/plain");
+            if (data === "vm") {
                 addVM();
+            } else if (data === "server") {
+                addServer();
             }
         });
 
@@ -124,11 +128,18 @@
         canvas.addEventListener("click", (e) => {
             if (justDragged) return;
 
-            // Bouton supprimer
+            // Bouton supprimer VM
             const delBtn = e.target.closest(".vm-delete");
             if (delBtn) {
                 const vmId = parseInt(delBtn.getAttribute("data-vm-id"), 10);
                 removeVM(vmId);
+                return;
+            }
+
+            // Bouton supprimer serveur
+            const srvDel = e.target.closest(".srv-delete");
+            if (srvDel) {
+                removeServer();
                 return;
             }
 
@@ -155,7 +166,7 @@
     // --- Drag des noeuds SVG ---
 
     function setupDrag() {
-        let dragging = null; // { type: "vm"|"switch", vmId?, startX, startY, origX, origY }
+        let dragging = null; // { type: "vm"|"switch"|"server", vmId?, startX, startY, origX, origY }
         const DRAG_THRESHOLD = 5;
         let dragStarted = false;
 
@@ -165,7 +176,7 @@
             const pt = Topology.screenToSVG(canvas, e.clientX, e.clientY);
 
             // Ne pas initier un drag sur le bouton supprimer
-            if (e.target.closest(".vm-delete")) return;
+            if (e.target.closest(".vm-delete") || e.target.closest(".srv-delete")) return;
 
             const vmNode = e.target.closest(".vm-node");
             if (vmNode) {
@@ -203,6 +214,22 @@
                 e.preventDefault();
                 return;
             }
+
+            const srvNode = e.target.closest(".vwifi-server-node");
+            if (srvNode && state.server) {
+                const layout = Topology.getLastLayout();
+                const srvPos = layout ? layout.serverPosition : null;
+                dragging = {
+                    type: "server",
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: srvPos ? srvPos.x : pt.x,
+                    origY: srvPos ? srvPos.y : pt.y,
+                };
+                dragStarted = false;
+                e.preventDefault();
+                return;
+            }
         });
 
         document.addEventListener("mousemove", (e) => {
@@ -232,6 +259,10 @@
             } else if (dragging.type === "switch") {
                 state.switchPos.x = dragging.origX + svgDx;
                 state.switchPos.y = dragging.origY + svgDy;
+                renderCanvas();
+            } else if (dragging.type === "server" && state.server) {
+                state.server.x = dragging.origX + svgDx;
+                state.server.y = dragging.origY + svgDy;
                 renderCanvas();
             }
         });
@@ -276,13 +307,14 @@
 
     function launchSingleVM(vmNum, vmId) {
         const globalParams = Config.gatherFormParams(state.vms);
+        if (state.server) Config.addServerParams(globalParams, state.server);
         const vm = state.vms.find(v => v.id === vmId);
         const vmConfig = vm ? {
             disk: vm.disk || null,
             ram: vm.ram || null,
             cpu: vm.cpu || null,
             disk_mode: vm.diskMode || null,
-            backend: vm.backend || null,
+            backend: vm.backend || "cloudinit",
             pkg_list: vm.pkgList || null,
         } : {};
 
@@ -447,18 +479,6 @@
         });
     }
 
-    // --- Backend radios ---
-
-    function setupBackendRadios() {
-        document.querySelectorAll('input[name="backend"]').forEach(radio => {
-            radio.addEventListener("change", () => {
-                state.backend = radio.value;
-                Config.switchBackend(radio.value);
-                updateAll();
-            });
-        });
-    }
-
     // --- Form listeners (global) ---
 
     function setupFormListeners() {
@@ -467,8 +487,7 @@
             "opt-vde-net", "opt-base-ip", "opt-base-ssh", "opt-pkg-list",
             "opt-no-nat", "opt-hub", "opt-mirror",
             "opt-net-script",
-            "opt-password", "opt-ssh-key", "opt-seeds-dir",
-            "opt-password-vwifi", "opt-ssh-key-vwifi", "opt-seeds-dir-vwifi", "opt-wlan-count",
+            "opt-password", "opt-ssh-key", "opt-seeds-dir", "opt-wlan-count",
         ];
 
         ids.forEach(id => {
@@ -510,6 +529,8 @@
 
                 if (prop === "disk" || prop === "diskMode" || prop === "pkgList") {
                     vm[prop] = el.value.trim() || null;
+                } else if (prop === "backend") {
+                    vm[prop] = el.value || "cloudinit";
                 } else {
                     const num = parseInt(el.value, 10);
                     vm[prop] = isNaN(num) ? null : num;
@@ -525,7 +546,11 @@
                     if (state.selectedVmId === null) return;
                     const vm = state.vms.find(v => v.id === state.selectedVmId);
                     if (!vm) return;
-                    vm[prop] = el.value || null;
+                    if (prop === "backend") {
+                        vm[prop] = el.value || "cloudinit";
+                    } else {
+                        vm[prop] = el.value || null;
+                    }
                     updateCLI();
                     renderCanvas();
                     Config.updateVmPanel(state);
@@ -547,6 +572,7 @@
 
     function setupServerFormListeners() {
         const srvFields = {
+            "srv-opt-backend": "backend",
             "srv-opt-ram": "ram",
             "srv-opt-cpu": "cpu",
             "srv-disk-path": "disk",
@@ -557,13 +583,15 @@
             const el = document.getElementById(id);
             if (!el) return;
             const handler = () => {
-                if (prop === "disk" || prop === "diskMode") {
-                    state.vwifiServer[prop] = el.value.trim() || null;
+                if (!state.server) return;
+                if (prop === "disk" || prop === "diskMode" || prop === "backend") {
+                    state.server[prop] = el.value.trim() || (prop === "backend" ? "cloudinit" : null);
                 } else {
                     const num = parseInt(el.value, 10);
-                    state.vwifiServer[prop] = isNaN(num) ? null : num;
+                    state.server[prop] = isNaN(num) ? null : num;
                 }
                 updateCLI();
+                updateRamWarning();
             };
             el.addEventListener("input", handler);
             if (el.tagName === "SELECT") {
@@ -645,7 +673,7 @@
             ram: null,
             cpu: null,
             diskMode: null,
-            backend: null,
+            backend: "cloudinit",
             pkgList: null,
             wlanCount: null,
             x: null,
@@ -663,6 +691,19 @@
         if (state.selectedVmId === vmId) {
             state.selectedVmId = null;
         }
+        updateAll();
+    }
+
+    function addServer() {
+        if (state.server) return; // un seul serveur
+        state.server = { backend: "cloudinit", disk: "", ram: null, cpu: null, diskMode: null, x: null, y: null };
+        selectServerPanel();
+        updateAll();
+    }
+
+    function removeServer() {
+        state.server = null;
+        state.selectedServerPanel = false;
         updateAll();
     }
 
@@ -741,6 +782,11 @@
             totalRam += vm.ram || globalRam;
         });
 
+        // Ajouter la RAM du serveur si present
+        if (state.server) {
+            totalRam += state.server.ram || 512;
+        }
+
         const ram = state.availableRam;
         const swap = state.availableSwap || 0;
         const total = ram + swap;
@@ -765,7 +811,6 @@
     // --- State sync ---
 
     function syncState() {
-        state.backend = Config.getSelectedBackend();
         state.noNat = document.getElementById("opt-no-nat")?.checked || false;
         state.hub = document.getElementById("opt-hub")?.checked || false;
         state.vdeNet = document.getElementById("opt-vde-net")?.value?.trim() || "192.168.100.0/24";
@@ -790,6 +835,7 @@
 
     function updateCLI() {
         const params = Config.gatherFormParams(state.vms);
+        if (state.server) Config.addServerParams(params, state.server);
         cliPreview.textContent = Config.buildCommandString(params);
     }
 
@@ -797,6 +843,7 @@
 
     async function launchLab() {
         const params = Config.gatherFormParams(state.vms);
+        if (state.server) Config.addServerParams(params, state.server);
         if (!params.disk) {
             alert("Veuillez specifier un chemin d'image disque.");
             return;
@@ -811,6 +858,7 @@
             const globalRam = parseInt(document.getElementById("opt-ram")?.value, 10) || 1024;
             let totalRam = 0;
             state.vms.forEach(vm => { totalRam += vm.ram || globalRam; });
+            if (state.server) totalRam += state.server.ram || 512;
             const ram = state.availableRam;
             const swap = state.availableSwap || 0;
             const total = ram + swap;
