@@ -182,7 +182,9 @@ const Topology = (() => {
         }
 
         // --- Serveur vwifi (a gauche du switch) ---
-        if (backend === "vwifi") {
+        const anyVwifi = backend === "vwifi" ||
+            (vms && vms.some(vm => vm.backend === "vwifi" || vm.backend === "fwcfg-vwifi"));
+        if (anyVwifi) {
             const srvX = switchCx - SWITCH_W / 2 - VWIFI_W - 30;
             const srvY = switchCy - VWIFI_H / 2;
 

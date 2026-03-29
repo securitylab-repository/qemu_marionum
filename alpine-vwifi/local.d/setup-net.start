@@ -1,0 +1,6 @@
+#!/bin/sh
+# Hook reseau fw_cfg — configure le reseau depuis les fichiers injectes par QEMU
+# Copier dans /etc/local.d/setup-net.start sur l'image Alpine
+
+SCRIPT=/sys/firmware/qemu_fw_cfg/by_name/opt/setup-net.sh/raw
+[ -f "$SCRIPT" ] && sh "$SCRIPT"

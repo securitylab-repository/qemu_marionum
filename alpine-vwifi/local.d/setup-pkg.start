@@ -1,0 +1,6 @@
+#!/bin/sh
+# Hook paquets fw_cfg — installe les paquets depuis le script injecte par QEMU
+# Copier dans /etc/local.d/setup-pkg.start sur l'image Alpine
+
+SCRIPT=/sys/firmware/qemu_fw_cfg/by_name/opt/setup-pkg.sh/raw
+[ -f "$SCRIPT" ] && sh "$SCRIPT"

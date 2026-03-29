@@ -13,10 +13,11 @@
     // Etat de l'application
     const state = {
         vms: [
-            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, x: null, y: null },
-            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, x: null, y: null },
+            { id: 1, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, wlanCount: null, x: null, y: null },
+            { id: 2, disk: "", ram: null, cpu: null, diskMode: null, backend: null, pkgList: null, wlanCount: null, x: null, y: null },
         ],
         selectedVmId: null,
+        selectedServerPanel: false,
         nextVmId: 3,
         backend: "cloudinit",
         noNat: false,
@@ -30,6 +31,7 @@
         switchPos: { x: null, y: null },
         availableRam: null,
         availableSwap: null,
+        vwifiServer: { ram: null, cpu: null, disk: null, diskMode: null },
     };
 
     // Elements du DOM
@@ -61,6 +63,7 @@
         setupBackendRadios();
         setupFormListeners();
         setupVmFormListeners();
+        setupServerFormListeners();
         setupButtons();
         setupOutputToggle();
         setupDrag();
@@ -134,6 +137,13 @@
             if (vmNode) {
                 const vmId = parseInt(vmNode.getAttribute("data-vm-id"), 10);
                 selectVM(vmId);
+                return;
+            }
+
+            // Clic sur le noeud vwifi-server
+            const srvNode = e.target.closest(".vwifi-server-node");
+            if (srvNode) {
+                selectServerPanel();
                 return;
             }
 
@@ -470,6 +480,7 @@
                 updateCLI();
                 renderCanvas();
                 Config.updateVmPanel(state);
+                Config.updateServerPanel(state);
                 updateDiskWarning();
                 updateRamWarning();
             });
@@ -486,6 +497,7 @@
             "vm-opt-disk-mode": "diskMode",
             "vm-opt-backend": "backend",
             "vm-opt-pkg-list": "pkgList",
+            "vm-opt-wlan-count": "wlanCount",
         };
 
         Object.entries(vmFields).forEach(([id, prop]) => {
@@ -505,6 +517,7 @@
 
                 updateCLI();
                 renderCanvas();
+                Config.updateServerPanel(state);
             });
             // Also listen for change on select
             if (el.tagName === "SELECT") {
@@ -515,6 +528,8 @@
                     vm[prop] = el.value || null;
                     updateCLI();
                     renderCanvas();
+                    Config.updateVmPanel(state);
+                    Config.updateServerPanel(state);
                 });
             }
         });
@@ -526,6 +541,35 @@
                 deselectVM();
             });
         }
+    }
+
+    // --- Form listeners (vwifi-server) ---
+
+    function setupServerFormListeners() {
+        const srvFields = {
+            "srv-opt-ram": "ram",
+            "srv-opt-cpu": "cpu",
+            "srv-disk-path": "disk",
+            "srv-opt-disk-mode": "diskMode",
+        };
+
+        Object.entries(srvFields).forEach(([id, prop]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const handler = () => {
+                if (prop === "disk" || prop === "diskMode") {
+                    state.vwifiServer[prop] = el.value.trim() || null;
+                } else {
+                    const num = parseInt(el.value, 10);
+                    state.vwifiServer[prop] = isNaN(num) ? null : num;
+                }
+                updateCLI();
+            };
+            el.addEventListener("input", handler);
+            if (el.tagName === "SELECT") {
+                el.addEventListener("change", handler);
+            }
+        });
     }
 
     // --- Boutons ---
@@ -603,6 +647,7 @@
             diskMode: null,
             backend: null,
             pkgList: null,
+            wlanCount: null,
             x: null,
             y: null,
         };
@@ -625,13 +670,25 @@
         const vm = state.vms.find(v => v.id === vmId);
         if (!vm) return;
         state.selectedVmId = vmId;
+        state.selectedServerPanel = false;
         Config.updateVmPanel(state);
+        Config.updateServerPanel(state);
+        renderCanvas();
+    }
+
+    function selectServerPanel() {
+        state.selectedVmId = null;
+        state.selectedServerPanel = true;
+        Config.updateVmPanel(state);
+        Config.updateServerPanel(state);
         renderCanvas();
     }
 
     function deselectVM() {
         state.selectedVmId = null;
+        state.selectedServerPanel = false;
         Config.updateVmPanel(state);
+        Config.updateServerPanel(state);
         renderCanvas();
     }
 
@@ -722,6 +779,7 @@
         renderCanvas();
         updateCLI();
         Config.updateVmPanel(state);
+        Config.updateServerPanel(state);
         updateDiskWarning();
         updateRamWarning();
     }

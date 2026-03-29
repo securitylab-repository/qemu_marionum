@@ -30,6 +30,12 @@ const Config = (() => {
             defaultRAM: 1024,
             fieldsets: ["opts-vwifi"],
         },
+        "fwcfg-vwifi": {
+            label: "Alpine (fw_cfg + vwifi)",
+            script: "./fwcfg.sh",
+            defaultRAM: 512,
+            fieldsets: ["opts-fwcfg"],
+        },
     };
 
     /**
@@ -101,11 +107,6 @@ const Config = (() => {
             if (globalOpt) {
                 globalOpt.textContent = `(global: ${globalLabel})`;
             }
-            // Masquer le select si le backend global est vwifi (pas d'override possible)
-            const backendRow = backendSelect.closest(".form-row");
-            if (backendRow) {
-                backendRow.style.display = (globalBackend === "vwifi") ? "none" : "";
-            }
         }
         if (diskInput) {
             diskInput.value = vm.disk || "";
@@ -134,13 +135,68 @@ const Config = (() => {
             pkgListInput.value = vm.pkgList || "";
             pkgListInput.placeholder = globalPkgList ? globalPkgList : "(herite du global)";
         }
+
+        // wlan-count : afficher quand le backend effectif contient vwifi
+        const wlanRow = document.querySelector(".vm-vwifi-opt");
+        const wlanInput = document.getElementById("vm-opt-wlan-count");
+        if (wlanRow && wlanInput) {
+            const globalBackend = document.querySelector('input[name="backend"]:checked')?.value || "cloudinit";
+            const effectiveBackend = vm.backend || globalBackend;
+            const isVwifi = effectiveBackend === "vwifi" || effectiveBackend === "fwcfg-vwifi";
+            wlanRow.style.display = isVwifi ? "" : "none";
+            if (isVwifi) {
+                wlanInput.value = vm.wlanCount || "";
+                const globalWlan = document.getElementById("opt-wlan-count")?.value || "1";
+                wlanInput.placeholder = globalWlan;
+            }
+        }
+    }
+
+    /**
+     * Met a jour le panel vwifi-server selon l'etat.
+     */
+    function updateServerPanel(state) {
+        const panel = document.getElementById("vwifi-server-panel");
+        if (!panel) return;
+
+        const globalBackend = document.querySelector('input[name="backend"]:checked')?.value || "cloudinit";
+        const vms = state.vms || [];
+        const anyVwifi = globalBackend === "vwifi" ||
+            vms.some(vm => vm.backend === "vwifi" || vm.backend === "fwcfg-vwifi");
+
+        if (!anyVwifi) {
+            panel.classList.remove("visible");
+            return;
+        }
+
+        panel.classList.add("visible");
+
+        const srv = state.vwifiServer || {};
+        const ramInput = document.getElementById("srv-opt-ram");
+        const cpuInput = document.getElementById("srv-opt-cpu");
+        const diskInput = document.getElementById("srv-disk-path");
+        const diskModeSelect = document.getElementById("srv-opt-disk-mode");
+
+        if (ramInput) ramInput.value = srv.ram || "";
+        if (cpuInput) cpuInput.value = srv.cpu || "";
+        if (diskInput) {
+            diskInput.value = srv.disk || "";
+            const globalDisk = document.getElementById("disk-path")?.value?.trim() || "(aucun)";
+            diskInput.placeholder = globalDisk || "(herite du global)";
+        }
+        if (diskModeSelect) {
+            diskModeSelect.value = srv.diskMode || "";
+            const globalMode = document.getElementById("opt-disk-mode")?.value || "snapshot";
+            const globalOpt = diskModeSelect.querySelector('option[value=""]');
+            if (globalOpt) globalOpt.textContent = `(global: ${globalMode})`;
+        }
     }
 
     /**
      * Verifie si une VM a une config differente du global.
      */
     function vmHasOverride(vm) {
-        return !!(vm.disk || vm.ram || vm.cpu || vm.diskMode || vm.backend || vm.pkgList);
+        return !!(vm.disk || vm.ram || vm.cpu || vm.diskMode || vm.backend || vm.pkgList || vm.wlanCount);
     }
 
     /**
@@ -200,6 +256,12 @@ const Config = (() => {
             if (wc) params.wlan_count = wc;
         }
 
+        // wlan_count global (depuis opts-vwifi)
+        if (backend === "vwifi" || backend === "fwcfg-vwifi") {
+            const wc = parseInt(document.getElementById("opt-wlan-count")?.value, 10);
+            if (wc) params.wlan_count = wc;
+        }
+
         // Per-VM config si au moins une VM a une surcharge
         if (hasAnyPerVmConfig(vms)) {
             params.vms = vms.map(vm => ({
@@ -210,7 +272,21 @@ const Config = (() => {
                 disk_mode: vm.diskMode || null,
                 backend: vm.backend || null,
                 pkg_list: vm.pkgList || null,
+                wlan_count: vm.wlanCount || null,
             }));
+        }
+
+        // vwifi_server config
+        const srvRam = parseInt(document.getElementById("srv-opt-ram")?.value, 10);
+        const srvCpu = parseInt(document.getElementById("srv-opt-cpu")?.value, 10);
+        const srvDisk = document.getElementById("srv-disk-path")?.value?.trim();
+        const srvDiskMode = document.getElementById("srv-opt-disk-mode")?.value;
+        if (srvRam || srvCpu || srvDisk || srvDiskMode) {
+            params.vwifi_server = {};
+            if (srvRam) params.vwifi_server.ram = srvRam;
+            if (srvCpu) params.vwifi_server.cpu = srvCpu;
+            if (srvDisk) params.vwifi_server.disk = srvDisk;
+            if (srvDiskMode) params.vwifi_server.disk_mode = srvDiskMode;
         }
 
         // Nettoyer les undefined
@@ -246,6 +322,10 @@ const Config = (() => {
                 parts.push(`ram=${vm.ram || params.ram || "default"}`);
                 parts.push(`cpu=${vm.cpu || params.cpu || "default"}`);
                 parts.push(`mode=${vm.disk_mode || params.disk_mode || "snapshot"}`);
+                const vmBackend = vm.backend || backend;
+                if (vmBackend === "vwifi" || vmBackend === "fwcfg-vwifi") {
+                    parts.push(`wlan=${vm.wlan_count || params.wlan_count || 1}`);
+                }
                 lines.push("  " + parts.join("  "));
             });
             return lines.join("\n");
@@ -307,6 +387,7 @@ const Config = (() => {
         BACKEND_CONFIG,
         switchBackend,
         updateVmPanel,
+        updateServerPanel,
         gatherFormParams,
         buildCommandString,
         getSelectedBackend,

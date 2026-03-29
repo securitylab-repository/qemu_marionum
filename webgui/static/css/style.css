@@ -532,6 +532,42 @@ fieldset label input[type="checkbox"] {
     min-width: 0;
 }
 
+/* vwifi-server config panel */
+#vwifi-server-panel {
+    display: none;
+    border: 2px solid #805ad5;
+    border-radius: var(--radius);
+    padding: 10px;
+    margin-bottom: 10px;
+    background: rgba(128, 90, 213, 0.05);
+}
+
+#vwifi-server-panel.visible {
+    display: block;
+}
+
+#vwifi-server-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+#vwifi-server-header h4 {
+    font-size: 0.85rem;
+    color: #b794f4;
+    font-weight: 700;
+    margin: 0;
+}
+
+#vwifi-server-panel .form-row label {
+    flex: 0 0 90px;
+}
+
+#vwifi-server-panel .form-row select,
+#vwifi-server-panel .form-row input {
+    min-width: 0;
+}
+
 /* VM info subtitle on SVG node */
 .vm-node text.vm-info {
     font-size: 8px;

@@ -69,6 +69,8 @@
                         <option value="">(global)</option>
                         <option value="fwcfg">Alpine (fw_cfg)</option>
                         <option value="cloudinit">Debian (cloud-init)</option>
+                        <option value="vwifi">Debian (vwifi)</option>
+                        <option value="fwcfg-vwifi">Alpine (fw_cfg + vwifi)</option>
                     </select>
                 </div>
                 <div class="form-row">
@@ -97,6 +99,39 @@
                 <div class="form-row">
                     <label for="vm-opt-pkg-list">Paquets</label>
                     <input type="text" id="vm-opt-pkg-list" placeholder="(herite du global)">
+                </div>
+                <div class="form-row vm-vwifi-opt" style="display:none">
+                    <label for="vm-opt-wlan-count">Interfaces WLAN</label>
+                    <input type="number" id="vm-opt-wlan-count" value="" min="1" max="4" placeholder="(global)">
+                </div>
+            </div>
+
+            <!-- vwifi-server config panel -->
+            <div id="vwifi-server-panel">
+                <div id="vwifi-server-header">
+                    <h4 id="vwifi-server-title">vwifi-server</h4>
+                </div>
+                <div class="form-row">
+                    <label for="srv-opt-ram">RAM (MB)</label>
+                    <input type="number" id="srv-opt-ram" placeholder="512" min="256">
+                </div>
+                <div class="form-row">
+                    <label for="srv-opt-cpu">CPUs</label>
+                    <input type="number" id="srv-opt-cpu" placeholder="1" min="1">
+                </div>
+                <div class="form-row">
+                    <label for="srv-disk-path">Disque</label>
+                    <input type="text" id="srv-disk-path" placeholder="(herite du global)" list="disk-list">
+                    <button class="btn-browse-small" data-target="srv-disk-path" title="Parcourir">...</button>
+                </div>
+                <div class="form-row">
+                    <label for="srv-opt-disk-mode">Mode disque</label>
+                    <select id="srv-opt-disk-mode">
+                        <option value="">(global)</option>
+                        <option value="snapshot">snapshot</option>
+                        <option value="overlay">overlay</option>
+                        <option value="copy">copy</option>
+                    </select>
                 </div>
             </div>
 
