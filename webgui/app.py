@@ -8,6 +8,7 @@ import subprocess
 import signal
 import threading
 import time
+import hashlib
 import glob as globmod
 from flask import Flask, render_template, jsonify, request
 from launcher import generate_launcher, generate_single_vm_script
@@ -81,9 +82,22 @@ def stop_processes():
 
 # --- Routes ---
 
+def _cache_bust():
+    """Hash base sur mtime des fichiers statiques pour cache-busting."""
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    sig = ""
+    for root, _dirs, files in os.walk(static_dir):
+        for f in sorted(files):
+            try:
+                sig += str(os.path.getmtime(os.path.join(root, f)))
+            except OSError:
+                pass
+    return hashlib.md5(sig.encode()).hexdigest()[:8]
+
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", cache_bust=_cache_bust())
 
 
 @app.route("/api/disks")

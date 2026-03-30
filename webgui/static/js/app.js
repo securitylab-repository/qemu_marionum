@@ -122,6 +122,7 @@
                 // Renumeroter
                 state.vms.forEach((vm, i) => { vm.id = i + 1; });
                 state.nextVmId = state.vms.length + 1;
+                cleanPreservedState();
                 updateAll();
             }
         });
@@ -525,7 +526,7 @@
         Object.entries(vmFields).forEach(([id, prop]) => {
             const el = document.getElementById(id);
             if (!el) return;
-            el.addEventListener("input", () => {
+            function applyVmFieldChange() {
                 if (state.selectedVmId === null) return;
                 const vm = state.vms.find(v => v.id === state.selectedVmId);
                 if (!vm) return;
@@ -543,24 +544,13 @@
 
                 updateCLI();
                 renderCanvas();
+                Config.updateVmPanel(state);
                 Config.updateServerPanel(state);
-            });
-            // Also listen for change on select
+            }
+
+            el.addEventListener("input", applyVmFieldChange);
             if (el.tagName === "SELECT") {
-                el.addEventListener("change", () => {
-                    if (state.selectedVmId === null) return;
-                    const vm = state.vms.find(v => v.id === state.selectedVmId);
-                    if (!vm) return;
-                    if (prop === "backend") {
-                        vm[prop] = el.value || "cloudinit";
-                    } else {
-                        vm[prop] = el.value || null;
-                    }
-                    updateCLI();
-                    renderCanvas();
-                    Config.updateVmPanel(state);
-                    Config.updateServerPanel(state);
-                });
+                el.addEventListener("change", applyVmFieldChange);
             }
         });
 
@@ -671,6 +661,32 @@
 
     // --- VM management ---
 
+    /**
+     * Nettoie /tmp/vde/ quand la topologie change (suppression de VM/serveur).
+     * Les anciens scripts ne correspondent plus a la nouvelle config.
+     */
+    function cleanPreservedState() {
+        if (!state.labRunning && !state.hasPreservedState) return;
+
+        // Arreter le lab si running
+        if (state.labRunning) {
+            fetch("/api/stop", { method: "POST", headers: { "Content-Type": "application/json" } })
+                .then(() => fetch("/api/clean", { method: "POST", headers: { "Content-Type": "application/json" } }))
+                .then(() => {
+                    outputContent.textContent += "[INFO] Lab arrete et nettoye (topologie modifiee).\n";
+                })
+                .catch(() => {});
+        } else {
+            // Juste nettoyer les fichiers preserves
+            fetch("/api/clean", { method: "POST", headers: { "Content-Type": "application/json" } })
+                .then(() => {
+                    outputContent.textContent += "[INFO] Etat precedent nettoye (topologie modifiee).\n";
+                })
+                .catch(() => {});
+        }
+        setLabIdle();
+    }
+
     function addVM() {
         const vm = {
             id: state.nextVmId++,
@@ -707,6 +723,8 @@
             const still = state.vms.find(v => v.id === state.selectedVmId);
             if (!still) state.selectedVmId = null;
         }
+        // Nettoyer /tmp/vde/ si un lab a ete lance (topologie modifiee)
+        cleanPreservedState();
         updateAll();
     }
 
@@ -720,6 +738,7 @@
     function removeServer() {
         state.server = null;
         state.selectedServerPanel = false;
+        cleanPreservedState();
         updateAll();
     }
 
