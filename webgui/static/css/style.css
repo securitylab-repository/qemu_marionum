@@ -400,10 +400,16 @@ body {
 
 .vwifi-server-node text {
     fill: #fff;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     text-anchor: middle;
     pointer-events: none;
+}
+
+.vwifi-server-node text.vm-ip {
+    font-size: 10px;
+    font-weight: 400;
+    fill: #e9d8fd;
 }
 
 /* Canvas drop highlight */
