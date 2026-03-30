@@ -306,16 +306,28 @@
                 <h4>Présentation</h4>
                 <p>Interface web pour déployer des labs multi-VMs basés sur QEMU + VDE (Virtual Distributed Ethernet).
                 Les VMs communiquent entre elles via un switch virtuel userspace, sans accès root sur le host.</p>
+                <p>L'interface utilise une architecture per-VM : chaque VM choisit indépendamment son backend, son image disque, sa RAM, etc.
+                Le canvas central affiche la topologie en temps réel.</p>
 
                 <h4>Démarrage rapide</h4>
                 <ol>
-                    <li><strong>Sélectionnez une image disque</strong> — champ obligatoire (bouton "Parcourir..." pour naviguer dans le système de fichiers)</li>
-                    <li><strong>Ajoutez des VMs</strong> — glissez l'icône "+ VM" depuis la palette sur le canvas</li>
-                    <li><strong>Choisissez un backend par VM</strong> — cliquez sur une VM pour configurer son backend (Debian, Alpine, vwifi...)</li>
-                    <li><strong>Ajoutez un serveur vwifi</strong> (optionnel) — glissez l'icône "+ Serveur" si vous utilisez un backend vwifi</li>
+                    <li><strong>Sélectionnez une image disque globale</strong> — champ obligatoire, utilisé par défaut pour les VMs sans disque spécifique (bouton "Parcourir...")</li>
+                    <li><strong>Ajoutez des VMs</strong> — glissez l'icône "<strong>+ VM</strong>" depuis la palette sur le canvas (le canvas est vide au démarrage)</li>
+                    <li><strong>Configurez chaque VM</strong> — cliquez sur une VM pour ouvrir son panneau : backend, disque, RAM, CPU, label, paquets</li>
+                    <li><strong>Ajoutez un serveur vwifi</strong> (optionnel) — glissez l'icône "<strong>+ Serveur vwifi</strong>" si vous utilisez un backend vwifi</li>
                     <li><strong>Cliquez "Lancer"</strong> — démarre le switch VDE + toutes les VMs. Chaque VM s'ouvre dans un xterm</li>
                     <li><strong>Cliquez "Stopper"</strong> — arrête les processus (l'état est préservé dans /tmp/vde/)</li>
                 </ol>
+
+                <h4>Interface</h4>
+                <table class="help-table">
+                    <tr><th>Zone</th><th>Description</th></tr>
+                    <tr><td><strong>Palette</strong> (gauche)</td><td>Icônes drag-and-drop : "+ VM" et "+ Serveur vwifi". Bouton "- VM" pour retirer la dernière VM</td></tr>
+                    <tr><td><strong>Canvas</strong> (centre)</td><td>Topologie SVG : VMs, switch VDE, NAT, serveur vwifi. Drag pour déplacer les noeuds</td></tr>
+                    <tr><td><strong>Configuration</strong> (droite)</td><td>Options globales (disque, RAM, réseau) et panneau per-VM (apparaît au clic sur une VM)</td></tr>
+                    <tr><td><strong>Sortie</strong> (bas)</td><td>Logs du lab, commandes Wireshark. Redimensionnable par le handle du haut</td></tr>
+                </table>
+                <p>La palette et le panneau de configuration sont <strong>redimensionnables</strong> en tirant les séparateurs verticaux entre les panneaux.</p>
 
                 <h4>Cycle de vie du lab</h4>
                 <table class="help-table">
@@ -326,6 +338,20 @@
                     <tr><td><strong>Nettoyer</strong></td><td>Tue les processus et supprime /tmp/vde/ (retour à zéro)</td><td>Idle</td></tr>
                 </table>
                 <p>En mode <strong>overlay/copy</strong>, le redémarrage réutilise les disques existants (les données sont conservées).</p>
+                <p><strong>Note :</strong> supprimer une VM ou le serveur depuis le canvas nettoie automatiquement /tmp/vde/ pour éviter les conflits avec les anciens scripts.</p>
+
+                <h4>Configuration per-VM</h4>
+                <p>Chaque VM possède sa propre configuration, indépendante des autres :</p>
+                <table class="help-table">
+                    <tr><th>Champ</th><th>Description</th></tr>
+                    <tr><td><strong>Label</strong></td><td>Nom affiché sur le canvas (ex: "Attaquant", "Serveur web")</td></tr>
+                    <tr><td><strong>Backend</strong></td><td>Mode de configuration : fw_cfg, cloud-init, vwifi (Debian), vwifi (Alpine)</td></tr>
+                    <tr><td><strong>Disque</strong></td><td>Image disque spécifique (si vide, utilise le disque global)</td></tr>
+                    <tr><td><strong>RAM / CPU</strong></td><td>Ressources dédiées (si vide, utilise les valeurs globales)</td></tr>
+                    <tr><td><strong>Mode disque</strong></td><td>snapshot, overlay, copy ou shared (si vide, utilise le mode global)</td></tr>
+                    <tr><td><strong>Paquets</strong></td><td>Fichier liste de paquets à installer au boot</td></tr>
+                </table>
+                <p>Cliquez sur une VM dans le canvas pour afficher son panneau. Le bouton "Config globale" revient aux options partagées.</p>
 
                 <h4>Les 4 backends</h4>
                 <table class="help-table">
@@ -355,7 +381,16 @@
                         <td>Labs WiFi légers avec Alpine</td>
                     </tr>
                 </table>
-                <p>Le serveur vwifi doit être ajouté explicitement depuis la palette (icône "+ Serveur"). Chaque VM choisit son propre backend.</p>
+                <p>Chaque VM choisit son propre backend. Les backends vwifi nécessitent un <strong>serveur vwifi</strong>, à ajouter depuis la palette (icône "+ Serveur vwifi").</p>
+
+                <h4>Serveur vwifi</h4>
+                <p>Le serveur vwifi est un noeud dédié qui coordonne la simulation WiFi entre les VMs. Il doit être ajouté explicitement depuis la palette.</p>
+                <ul>
+                    <li>Configurable : backend (fw_cfg / cloud-init), RAM, CPU, disque, mode disque</li>
+                    <li>Adresse IP fixe : <code>x.x.x.2</code> sur le réseau VDE</li>
+                    <li>Supprimable via le bouton &times; sur le canvas</li>
+                    <li>Déplaçable par drag sur le canvas</li>
+                </ul>
 
                 <h4>Modes disque</h4>
                 <table class="help-table">
@@ -368,9 +403,10 @@
 
                 <h4>Gestion individuelle des VMs</h4>
                 <ul>
-                    <li><strong>Clic droit</strong> sur une VM du canvas &rarr; menu contextuel : Démarrer / Arrêter / Configurer</li>
-                    <li><strong>Clic gauche</strong> sur une VM &rarr; ouvre le panneau de configuration per-VM (disque, RAM, CPU, backend, paquets)</li>
-                    <li><strong>Drag</strong> sur une VM ou le switch &rarr; déplacer les icônes sur le canvas</li>
+                    <li><strong>Clic gauche</strong> sur une VM &rarr; ouvre le panneau de configuration per-VM</li>
+                    <li><strong>Clic droit</strong> sur une VM ou le serveur &rarr; menu contextuel : Démarrer / Arrêter / Configurer</li>
+                    <li><strong>Drag</strong> sur une VM, le switch ou le serveur &rarr; déplacer sur le canvas</li>
+                    <li><strong>Bouton &times;</strong> sur une VM ou le serveur &rarr; supprimer du canvas</li>
                     <li>Les VMs peuvent être arrêtées et redémarrées individuellement une fois le lab lancé</li>
                     <li>Fermer le xterm d'une VM = arrêter la VM (SIGHUP tue le processus QEMU)</li>
                 </ul>
@@ -404,30 +440,42 @@ VM1 (10.0.2.15)         VM2 (10.0.2.15)
                     <li><strong>Accès SSH</strong> : <code>ssh debian@localhost -p 2222</code> (port = base SSH + index VM)</li>
                 </ul>
 
-                <h4>Scripts générés</h4>
-                <p>L'interface web génère ses propres scripts de lancement dans <code>/tmp/vde/</code> (indépendant des scripts bash du projet).</p>
-                <p>La commande CLI équivalente est visible en bas de l'interface (pied de page).</p>
-
                 <h4>Fichiers générés</h4>
-                <p>Tout est dans <code>/tmp/vde/</code> :</p>
+                <p>L'interface génère ses propres scripts dans <code>/tmp/vde/</code>. La commande CLI équivalente est visible dans le pied de page.</p>
                 <table class="help-table">
                     <tr><th>Fichier</th><th>Description</th></tr>
                     <tr><td><code>switch/</code></td><td>Socket VDE</td></tr>
                     <tr><td><code>mgmt</code></td><td>Socket management (<code>unixterm /tmp/vde/mgmt</code>)</td></tr>
+                    <tr><td><code>webgui-launch.sh</code></td><td>Script principal de lancement du lab</td></tr>
                     <tr><td><code>vmN-cmd.sh</code></td><td>Commande QEMU par VM</td></tr>
                     <tr><td><code>vmN-xterm.sh</code></td><td>Wrapper xterm par VM (pour redémarrage individuel)</td></tr>
-                    <tr><td><code>seeds/</code></td><td>Seeds ISO cloud-init</td></tr>
+                    <tr><td><code>seeds/</code></td><td>Seeds ISO cloud-init (backends cloud-init / vwifi Debian)</td></tr>
                     <tr><td><code>vm_pids.txt</code></td><td>PIDs des xterms</td></tr>
                     <tr><td><code>vde.pipe</code></td><td>FIFO pour Wireshark (mode mirror)</td></tr>
                 </table>
 
-                <h4>Raccourcis clavier</h4>
+                <h4>Interactions</h4>
                 <table class="help-table">
-                    <tr><th>Raccourci</th><th>Action</th></tr>
-                    <tr><td>Clic droit sur VM</td><td>Menu contextuel (démarrer/arrêter)</td></tr>
-                    <tr><td>Clic gauche sur VM</td><td>Configurer la VM</td></tr>
-                    <tr><td>Drag sur VM/switch</td><td>Déplacer sur le canvas</td></tr>
+                    <tr><th>Action</th><th>Résultat</th></tr>
+                    <tr><td>Clic gauche sur VM</td><td>Ouvrir la configuration per-VM</td></tr>
+                    <tr><td>Clic gauche sur serveur</td><td>Ouvrir la configuration du serveur</td></tr>
+                    <tr><td>Clic droit sur VM / serveur</td><td>Menu contextuel (démarrer / arrêter)</td></tr>
+                    <tr><td>Drag sur VM / switch / serveur</td><td>Déplacer sur le canvas</td></tr>
+                    <tr><td>Drag séparateur vertical</td><td>Redimensionner palette / configuration</td></tr>
+                    <tr><td>Drag handle panneau sortie</td><td>Redimensionner le panneau de sortie</td></tr>
                     <tr><td>Escape</td><td>Fermer les menus et modales</td></tr>
+                </table>
+
+                <h4>Dépendances</h4>
+                <table class="help-table">
+                    <tr><th>Paquet</th><th>Usage</th></tr>
+                    <tr><td><code>qemu-system-x86</code></td><td>Émulation des VMs (compilé avec support VDE)</td></tr>
+                    <tr><td><code>vde2</code></td><td>Switch virtuel (vde_switch)</td></tr>
+                    <tr><td><code>xterm</code></td><td>Terminal pour chaque VM</td></tr>
+                    <tr><td><code>python3-flask</code></td><td>Serveur web de l'interface</td></tr>
+                    <tr><td><code>cloud-image-utils</code></td><td>Génération des seeds cloud-init (backends Debian)</td></tr>
+                    <tr><td><code>vdecapture</code></td><td>Port mirroring Wireshark</td></tr>
+                    <tr><td><code>socat</code></td><td>Communication avec le switch VDE</td></tr>
                 </table>
 
             </div>
