@@ -66,7 +66,7 @@
         setupMirrorButton();
         setupHelpModal();
         setupFileBrowser();
-        setupPanelToggles();
+        setupPanelResize();
 
         fetchMemory();
         setInterval(fetchMemory, 30000);
@@ -1205,28 +1205,76 @@
         };
     }
 
-    // --- Toggle palette / sidebar ---
+    // --- Resize palette / sidebar ---
 
-    function setupPanelToggles() {
+    function setupPanelResize() {
         const main = document.getElementById("main");
-        const palette = document.getElementById("palette");
-        const sidebar = document.getElementById("sidebar");
-        const btnPalette = document.getElementById("btn-toggle-palette");
-        const btnSidebar = document.getElementById("btn-toggle-sidebar");
+        const paletteHandle = document.getElementById("palette-resize");
+        const sidebarHandle = document.getElementById("sidebar-resize");
 
-        btnPalette.addEventListener("click", () => {
-            palette.classList.toggle("collapsed");
-            main.classList.toggle("palette-collapsed");
-            btnPalette.innerHTML = palette.classList.contains("collapsed") ? "&raquo;" : "&laquo;";
-            btnPalette.title = palette.classList.contains("collapsed") ? "Deplier la palette" : "Replier la palette";
+        if (!paletteHandle || !sidebarHandle) return;
+
+        let resizing = null; // "palette" ou "sidebar"
+        let startX = 0;
+        let startWidth = 0;
+
+        const MIN_PALETTE = 50;
+        const MAX_PALETTE = 200;
+        const MIN_SIDEBAR = 200;
+        const MAX_SIDEBAR = 600;
+
+        paletteHandle.addEventListener("mousedown", (e) => {
+            resizing = "palette";
+            startX = e.clientX;
+            const palette = document.getElementById("palette");
+            startWidth = palette.offsetWidth;
+            paletteHandle.classList.add("active");
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+            e.preventDefault();
         });
 
-        btnSidebar.addEventListener("click", () => {
-            sidebar.classList.toggle("collapsed");
-            main.classList.toggle("sidebar-collapsed");
-            btnSidebar.innerHTML = sidebar.classList.contains("collapsed") ? "&laquo;" : "&raquo;";
-            btnSidebar.title = sidebar.classList.contains("collapsed") ? "Deplier la configuration" : "Replier la configuration";
+        sidebarHandle.addEventListener("mousedown", (e) => {
+            resizing = "sidebar";
+            startX = e.clientX;
+            const sidebar = document.getElementById("sidebar");
+            startWidth = sidebar.offsetWidth;
+            sidebarHandle.classList.add("active");
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+            e.preventDefault();
         });
+
+        document.addEventListener("mousemove", (e) => {
+            if (!resizing) return;
+
+            if (resizing === "palette") {
+                const dx = e.clientX - startX;
+                const newW = Math.max(MIN_PALETTE, Math.min(MAX_PALETTE, startWidth + dx));
+                main.style.gridTemplateColumns = `${newW}px 5px 1fr 5px ${getSidebarWidth()}px`;
+            } else {
+                const dx = startX - e.clientX;
+                const newW = Math.max(MIN_SIDEBAR, Math.min(MAX_SIDEBAR, startWidth + dx));
+                main.style.gridTemplateColumns = `${getPaletteWidth()}px 5px 1fr 5px ${newW}px`;
+            }
+        });
+
+        document.addEventListener("mouseup", () => {
+            if (!resizing) return;
+            paletteHandle.classList.remove("active");
+            sidebarHandle.classList.remove("active");
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            resizing = null;
+        });
+
+        function getPaletteWidth() {
+            return document.getElementById("palette").offsetWidth;
+        }
+
+        function getSidebarWidth() {
+            return document.getElementById("sidebar").offsetWidth;
+        }
     }
 
     // --- Modal Aide ---

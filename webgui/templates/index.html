@@ -27,7 +27,6 @@
     <div id="main">
         <!-- Palette gauche -->
         <aside id="palette">
-            <button id="btn-toggle-palette" class="panel-toggle" title="Replier/deplier la palette">&laquo;</button>
             <h3>Palette</h3>
             <div
                 id="pc-icon"
@@ -56,6 +55,7 @@
                 <span>+ Serveur</span>
             </div>
         </aside>
+        <div id="palette-resize" class="resize-handle-v" title="Redimensionner"></div>
 
         <!-- Canvas SVG central -->
         <div id="canvas-container">
@@ -64,13 +64,11 @@
             </svg>
             <div id="canvas-hint">Glissez des VMs depuis la palette</div>
         </div>
+        <div id="sidebar-resize" class="resize-handle-v" title="Redimensionner"></div>
 
         <!-- Sidebar configuration -->
         <aside id="sidebar">
-            <div class="sidebar-toggle-row">
-                <h3>Configuration</h3>
-                <button id="btn-toggle-sidebar" class="panel-toggle" title="Replier/deplier la configuration">&raquo;</button>
-            </div>
+            <h3>Configuration</h3>
 
             <!-- Per-VM config panel (hidden by default) -->
             <div id="vm-config-panel">
