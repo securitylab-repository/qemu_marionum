@@ -17,8 +17,8 @@ const Topology = (() => {
     const SWITCH_H = 40;
     const NAT_RX = 60;
     const NAT_RY = 22;
-    const VWIFI_W = 120;
-    const VWIFI_H = 50;
+    const VWIFI_W = 110;
+    const VWIFI_H = 44;
 
     // Derniere disposition calculee (pour initialiser les drags)
     let lastLayout = null;
@@ -209,7 +209,7 @@ const Topology = (() => {
                 width: VWIFI_W, height: VWIFI_H,
             }));
             const srvText1 = svgEl("text", {
-                x: srvCx, y: srvY + 20,
+                x: srvCx, y: srvY + 18,
             });
             srvText1.textContent = "vwifi-server";
             gSrv.appendChild(srvText1);
@@ -217,7 +217,7 @@ const Topology = (() => {
             const parts = vdeNet.split("/")[0].split(".");
             const srvIPText = `${parts[0]}.${parts[1]}.${parts[2]}.2`;
             const srvText2 = svgEl("text", {
-                x: srvCx, y: srvY + 36,
+                x: srvCx, y: srvY + 32,
                 class: "vm-ip",
             });
             srvText2.textContent = srvIPText;
