@@ -38,7 +38,13 @@ const Config = (() => {
         }
 
         panel.classList.add("visible");
-        title.textContent = `VM${vm.id}`;
+        title.textContent = vm.label ? `VM${vm.id} — ${vm.label}` : `VM${vm.id}`;
+
+        // Label
+        const labelInput = document.getElementById("vm-opt-label");
+        if (labelInput) {
+            labelInput.value = vm.label || "";
+        }
 
         // Valeurs globales pour les placeholders
         const globalDisk = document.getElementById("disk-path")?.value?.trim() || "(aucun)";

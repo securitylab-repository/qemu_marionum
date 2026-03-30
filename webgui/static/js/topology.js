@@ -264,11 +264,12 @@ const Topology = (() => {
                 width: VM_W, height: VM_H,
             }));
 
-            // Nom
+            // Nom + label
+            const vmLabel = vm.label ? `VM${vm.id} — ${vm.label}` : `VM${vm.id}`;
             const nameText = svgEl("text", {
                 x: pos.x, y: pos.y - 8,
             });
-            nameText.textContent = `VM${vm.id}`;
+            nameText.textContent = vmLabel;
             gVM.appendChild(nameText);
 
             // IP

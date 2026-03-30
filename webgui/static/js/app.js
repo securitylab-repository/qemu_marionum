@@ -115,11 +115,13 @@
         // Bouton retirer VM
         document.getElementById("btn-remove-vm").addEventListener("click", () => {
             if (state.vms.length > 0) {
-                // Retirer la derniere VM
                 const removed = state.vms.pop();
                 if (state.selectedVmId === removed.id) {
                     state.selectedVmId = null;
                 }
+                // Renumeroter
+                state.vms.forEach((vm, i) => { vm.id = i + 1; });
+                state.nextVmId = state.vms.length + 1;
                 updateAll();
             }
         });
@@ -510,6 +512,7 @@
 
     function setupVmFormListeners() {
         const vmFields = {
+            "vm-opt-label": "label",
             "vm-disk-path": "disk",
             "vm-opt-ram": "ram",
             "vm-opt-cpu": "cpu",
@@ -527,7 +530,9 @@
                 const vm = state.vms.find(v => v.id === state.selectedVmId);
                 if (!vm) return;
 
-                if (prop === "disk" || prop === "diskMode" || prop === "pkgList") {
+                if (prop === "label") {
+                    vm[prop] = el.value.trim();
+                } else if (prop === "disk" || prop === "diskMode" || prop === "pkgList") {
                     vm[prop] = el.value.trim() || null;
                 } else if (prop === "backend") {
                     vm[prop] = el.value || "cloudinit";
@@ -669,6 +674,7 @@
     function addVM() {
         const vm = {
             id: state.nextVmId++,
+            label: "",
             disk: "",
             ram: null,
             cpu: null,
@@ -690,6 +696,16 @@
         state.vms.splice(idx, 1);
         if (state.selectedVmId === vmId) {
             state.selectedVmId = null;
+        }
+        // Renumeroter les VMs restantes (1, 2, 3, ...)
+        state.vms.forEach((vm, i) => {
+            vm.id = i + 1;
+        });
+        state.nextVmId = state.vms.length + 1;
+        // Corriger selectedVmId si necessaire
+        if (state.selectedVmId !== null) {
+            const still = state.vms.find(v => v.id === state.selectedVmId);
+            if (!still) state.selectedVmId = null;
         }
         updateAll();
     }
