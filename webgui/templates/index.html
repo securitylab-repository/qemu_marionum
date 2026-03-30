@@ -27,6 +27,7 @@
     <div id="main">
         <!-- Palette gauche -->
         <aside id="palette">
+            <button id="btn-toggle-palette" class="panel-toggle" title="Replier/deplier la palette">&laquo;</button>
             <h3>Palette</h3>
             <div
                 id="pc-icon"
@@ -66,7 +67,10 @@
 
         <!-- Sidebar configuration -->
         <aside id="sidebar">
-            <h3>Configuration</h3>
+            <div class="sidebar-toggle-row">
+                <h3>Configuration</h3>
+                <button id="btn-toggle-sidebar" class="panel-toggle" title="Replier/deplier la configuration">&raquo;</button>
+            </div>
 
             <!-- Per-VM config panel (hidden by default) -->
             <div id="vm-config-panel">

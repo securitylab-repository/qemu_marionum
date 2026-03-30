@@ -66,6 +66,7 @@
         setupMirrorButton();
         setupHelpModal();
         setupFileBrowser();
+        setupPanelToggles();
 
         fetchMemory();
         setInterval(fetchMemory, 30000);
@@ -1202,6 +1203,30 @@
                 btnMirror.disabled = false;
             }
         };
+    }
+
+    // --- Toggle palette / sidebar ---
+
+    function setupPanelToggles() {
+        const main = document.getElementById("main");
+        const palette = document.getElementById("palette");
+        const sidebar = document.getElementById("sidebar");
+        const btnPalette = document.getElementById("btn-toggle-palette");
+        const btnSidebar = document.getElementById("btn-toggle-sidebar");
+
+        btnPalette.addEventListener("click", () => {
+            palette.classList.toggle("collapsed");
+            main.classList.toggle("palette-collapsed");
+            btnPalette.innerHTML = palette.classList.contains("collapsed") ? "&raquo;" : "&laquo;";
+            btnPalette.title = palette.classList.contains("collapsed") ? "Deplier la palette" : "Replier la palette";
+        });
+
+        btnSidebar.addEventListener("click", () => {
+            sidebar.classList.toggle("collapsed");
+            main.classList.toggle("sidebar-collapsed");
+            btnSidebar.innerHTML = sidebar.classList.contains("collapsed") ? "&laquo;" : "&raquo;";
+            btnSidebar.title = sidebar.classList.contains("collapsed") ? "Deplier la configuration" : "Replier la configuration";
+        });
     }
 
     // --- Modal Aide ---
