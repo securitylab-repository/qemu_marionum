@@ -11,8 +11,9 @@ const Topology = (() => {
     const NS = "http://www.w3.org/2000/svg";
 
     // Dimensions des elements
-    const VM_W = 100;
+    const VM_W_MIN = 100;
     const VM_H = 50;
+    const CHAR_WIDTH = 7; // largeur estimee d'un caractere en SVG (font 12px)
     const SWITCH_W = 120;
     const SWITCH_H = 40;
     const NAT_RX = 60;
@@ -243,7 +244,13 @@ const Topology = (() => {
         // --- VMs ---
         vmPositions.forEach((pos, i) => {
             const vm = vms[i];
-            const vmX = pos.x - VM_W / 2;
+
+            // Calculer la largeur dynamique selon le label
+            const vmLabel = vm.label ? `VM${vm.id} — ${vm.label}` : `VM${vm.id}`;
+            const labelWidth = vmLabel.length * CHAR_WIDTH + 20;
+            const vmW = Math.max(VM_W_MIN, labelWidth);
+
+            const vmX = pos.x - vmW / 2;
             const vmY = pos.y - VM_H / 2;
 
             // Ligne VM -> Switch
@@ -261,11 +268,10 @@ const Topology = (() => {
             gVM.appendChild(svgEl("rect", {
                 class: "vm-bg",
                 x: vmX, y: vmY,
-                width: VM_W, height: VM_H,
+                width: vmW, height: VM_H,
             }));
 
             // Nom + label
-            const vmLabel = vm.label ? `VM${vm.id} — ${vm.label}` : `VM${vm.id}`;
             const nameText = svgEl("text", {
                 x: pos.x, y: pos.y - 8,
             });
@@ -309,11 +315,11 @@ const Topology = (() => {
                 "data-vm-id": vm.id,
             });
             gDel.appendChild(svgEl("circle", {
-                cx: vmX + VM_W - 2, cy: vmY + 2,
+                cx: vmX + vmW - 2, cy: vmY + 2,
                 r: 8,
             }));
             const delText = svgEl("text", {
-                x: vmX + VM_W - 2, y: vmY + 6,
+                x: vmX + vmW - 2, y: vmY + 6,
                 "text-anchor": "middle",
             });
             delText.textContent = "\u00d7";
