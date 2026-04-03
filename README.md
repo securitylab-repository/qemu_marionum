@@ -136,8 +136,64 @@ Le script `prepare-image.sh` est exécuté à l'intérieur d'une VM Alpine fraî
 
 ### Installation
 
+#### Dépendances système (Ubuntu/Debian)
+
 ```bash
-# Installation comme service systemd
+# Paquets obligatoires
+sudo apt install python3-flask qemu-system-x86 qemu-utils vde2 xterm socat
+
+# Pour le backend cloud-init (Debian VMs) — au moins l'un des deux :
+sudo apt install cloud-image-utils    # fournit cloud-localds (recommandé)
+sudo apt install genisoimage          # alternative si cloud-localds absent
+
+# Optionnel — port mirroring / capture réseau
+sudo apt install wireshark
+```
+
+| Paquet | Fournit | Rôle |
+|--------|---------|------|
+| `python3-flask` | Flask | Serveur web de l'application |
+| `qemu-system-x86` | `qemu-system-x86_64` | Hyperviseur des VMs |
+| `qemu-utils` | `qemu-img` | Création des disques overlay/copy |
+| `vde2` | `vde_switch` | Switch virtuel Ethernet inter-VMs |
+| `xterm` | `xterm` | Terminal d'affichage des VMs |
+| `socat` | `socat` | Communication avec le socket de management VDE |
+| `cloud-image-utils` | `cloud-localds` | Génération des seeds ISO cloud-init |
+| `genisoimage` | `genisoimage` | Alternative pour la génération des seeds ISO |
+| `wireshark` | `wireshark` | Capture réseau via port mirroring (optionnel) |
+
+#### vdecapture (compilation manuelle)
+
+`vdecapture` est nécessaire pour la fonctionnalité de port mirroring Wireshark. Il n'est pas disponible dans les dépôts Ubuntu et doit être compilé depuis les sources :
+
+```bash
+sudo apt install git cmake gcc libvdeplug-dev
+git clone https://github.com/virtualsquare/vdecapture.git
+cd vdecapture
+mkdir build && cd build
+cmake ..
+make
+sudo make install
+```
+
+#### QEMU avec support VDE (si nécessaire)
+
+Si la version de QEMU installée ne supporte pas VDE (`-netdev vde`), il faut la recompiler :
+
+```bash
+sudo apt install build-essential ninja-build pkg-config libglib2.0-dev \
+    libpixman-1-dev libvdeplug-dev libslirp-dev
+wget https://download.qemu.org/qemu-<version>.tar.xz
+tar xf qemu-<version>.tar.xz && cd qemu-<version>
+./configure --target-list=x86_64-softmmu --enable-vde --enable-slirp
+make -j$(nproc)
+sudo make install
+```
+
+#### Lancement
+
+```bash
+# Installation comme service systemd (installe aussi les dépendances apt)
 sudo bash webgui/setup-service.sh [utilisateur]
 
 # Ou lancement manuel
@@ -145,4 +201,18 @@ cd webgui && python3 app.py
 # → http://localhost:5000
 ```
 
-Dépendances système : `python3-flask`, `xterm`, `socat`, `vde2`, `qemu-system-x86`
+#### Images disque
+
+L'application a besoin d'images disque QEMU (`.qcow2`, `.img`, `.raw`) pour les VMs :
+
+- **Backend `cloudinit` / `vwifi_cloudinit`** : image Debian genericcloud ([debian.org/cdimage/cloud](https://cloud.debian.org/cdimage/cloud/))
+- **Backend `fwcfg` / `vwifi_fwcfg`** : image Alpine préparée manuellement (voir `alpine-vwifi/prepare-image.sh`)
+
+#### Dépendances dans les VMs (backend vwifi uniquement)
+
+Pour les backends `vwifi_cloudinit` et `vwifi_fwcfg`, les VMs ont besoin de :
+- `vwifi-server`, `vwifi-client`, `vwifi-add-interfaces` (compilés depuis [github.com/linux-music-acoustics/vwifi](https://github.com/linux-music-acoustics/vwifi))
+- Module noyau `mac80211_hwsim`
+- `iw`, `hostapd`, `wpa_supplicant`, `tmux`, `tcpdump`
+
+Pour les images Alpine, le script `alpine-vwifi/prepare-image.sh` automatise l'installation de ces dépendances.
