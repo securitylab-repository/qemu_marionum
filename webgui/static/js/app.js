@@ -38,6 +38,7 @@
     let btnStop;
     let btnRestart;
     let btnClean;
+    let btnResetTopology;
     let statusBadge;
 
     // Drag state
@@ -53,6 +54,7 @@
         btnStop = document.getElementById("btn-stop");
         btnRestart = document.getElementById("btn-restart");
         btnClean = document.getElementById("btn-clean");
+        btnResetTopology = document.getElementById("btn-reset-topology");
         statusBadge = document.getElementById("status-badge");
 
         setupDragAndDrop();
@@ -609,6 +611,7 @@
         btnStop.addEventListener("click", stopLab);
         btnRestart.addEventListener("click", restartLab);
         btnClean.addEventListener("click", cleanLab);
+        btnResetTopology.addEventListener("click", resetTopology);
     }
 
     // --- Output toggle ---
@@ -984,6 +987,7 @@
         Config.updateServerPanel(state);
         updateDiskWarning();
         updateRamWarning();
+        updateResetButton();
         saveTopology();
     }
 
@@ -1138,6 +1142,48 @@
             outputContent.textContent += `[ERREUR] ${err.message}\n`;
         }
         setLabIdle();
+    }
+
+    function resetTopology() {
+        if (state.labRunning || state.hasPreservedState) return;
+        if (state.vms.length === 0 && !state.server) return;
+        if (!confirm("Reinitialiser la topologie et la configuration ?")) return;
+
+        // Vider la topologie
+        state.vms = [];
+        state.server = null;
+        state.nextVmId = 1;
+        state.selectedVmId = null;
+        state.selectedServerPanel = false;
+        state.switchPos = { x: null, y: null };
+
+        // Reinitialiser la config globale
+        setInputValue("disk-path", "");
+        setInputValue("opt-ram", 1024);
+        setInputValue("opt-cpu", 2);
+        setInputValue("opt-disk-mode", "snapshot");
+        setInputValue("opt-vde-net", "192.168.100.0/24");
+        setInputValue("opt-base-ip", 10);
+        setInputValue("opt-base-ssh", 2222);
+        setInputValue("opt-pkg-list", "");
+        setCheckbox("opt-no-nat", false);
+        setCheckbox("opt-hub", false);
+        setCheckbox("opt-mirror", false);
+        setInputValue("opt-password", "");
+        setInputValue("opt-ssh-key", "");
+        setInputValue("opt-seeds-dir", "");
+        setInputValue("opt-net-script", "");
+        setInputValue("opt-wlan-count", 1);
+
+        // Vider le localStorage
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+
+        updateAll();
+    }
+
+    function updateResetButton() {
+        const hasTopology = state.vms.length > 0 || state.server !== null;
+        btnResetTopology.disabled = state.labRunning || state.hasPreservedState || !hasTopology;
     }
 
     function setLabStopped(hasPreservedState) {
