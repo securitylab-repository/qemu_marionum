@@ -72,6 +72,7 @@
         fetchMemory();
         setInterval(fetchMemory, 30000);
 
+        restoreTopology();
         updateAll();
         checkInitialStatus();
     });
@@ -277,6 +278,7 @@
             if (dragStarted) {
                 justDragged = true;
                 setTimeout(() => { justDragged = false; }, 0);
+                saveTopology();
             }
             dragging = null;
             dragStarted = false;
@@ -507,6 +509,7 @@
                 Config.updateServerPanel(state);
                 updateDiskWarning();
                 updateRamWarning();
+                saveTopology();
             });
         });
     }
@@ -548,6 +551,7 @@
                 renderCanvas();
                 Config.updateVmPanel(state);
                 Config.updateServerPanel(state);
+                saveTopology();
             }
 
             el.addEventListener("input", applyVmFieldChange);
@@ -589,6 +593,7 @@
                 }
                 updateCLI();
                 updateRamWarning();
+                saveTopology();
             };
             el.addEventListener("input", handler);
             if (el.tagName === "SELECT") {
@@ -854,6 +859,121 @@
         state.baseIP = parseInt(document.getElementById("opt-base-ip")?.value, 10) || 10;
     }
 
+    // --- Auto-save / restore topologie (localStorage) ---
+
+    const STORAGE_KEY = "qemu-lab-topology";
+
+    function saveTopology() {
+        try {
+            const data = {
+                version: 1,
+                topology: {
+                    vms: state.vms.map(vm => ({
+                        id: vm.id, label: vm.label || "", disk: vm.disk || "",
+                        ram: vm.ram, cpu: vm.cpu, diskMode: vm.diskMode,
+                        backend: vm.backend || "cloudinit", pkgList: vm.pkgList,
+                        wlanCount: vm.wlanCount, x: vm.x, y: vm.y,
+                    })),
+                    server: state.server ? {
+                        backend: state.server.backend || "cloudinit",
+                        disk: state.server.disk || "",
+                        ram: state.server.ram, cpu: state.server.cpu,
+                        diskMode: state.server.diskMode,
+                        x: state.server.x, y: state.server.y,
+                    } : null,
+                    switchPos: { x: state.switchPos.x, y: state.switchPos.y },
+                },
+                globalConfig: {
+                    disk: document.getElementById("disk-path")?.value?.trim() || "",
+                    ram: parseInt(document.getElementById("opt-ram")?.value, 10) || 1024,
+                    cpu: parseInt(document.getElementById("opt-cpu")?.value, 10) || 2,
+                    diskMode: document.getElementById("opt-disk-mode")?.value || "snapshot",
+                    vdeNet: document.getElementById("opt-vde-net")?.value?.trim() || "192.168.100.0/24",
+                    baseIP: parseInt(document.getElementById("opt-base-ip")?.value, 10) || 10,
+                    baseSSH: parseInt(document.getElementById("opt-base-ssh")?.value, 10) || 2222,
+                    pkgList: document.getElementById("opt-pkg-list")?.value?.trim() || "",
+                    noNat: document.getElementById("opt-no-nat")?.checked || false,
+                    hub: document.getElementById("opt-hub")?.checked || false,
+                    mirror: document.getElementById("opt-mirror")?.checked || false,
+                    password: document.getElementById("opt-password")?.value?.trim() || "",
+                    sshKey: document.getElementById("opt-ssh-key")?.value?.trim() || "",
+                    seedsDir: document.getElementById("opt-seeds-dir")?.value?.trim() || "",
+                    netScript: document.getElementById("opt-net-script")?.value?.trim() || "",
+                    wlanCount: parseInt(document.getElementById("opt-wlan-count")?.value, 10) || 1,
+                },
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch {
+            // localStorage indisponible ou plein
+        }
+    }
+
+    function restoreTopology() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return false;
+            const data = JSON.parse(raw);
+            if (!data.version || !data.topology) return false;
+
+            const gc = data.globalConfig || {};
+            const topo = data.topology;
+
+            // Restaurer config globale
+            setInputValue("disk-path", gc.disk || "");
+            setInputValue("opt-ram", gc.ram || 1024);
+            setInputValue("opt-cpu", gc.cpu || 2);
+            setInputValue("opt-disk-mode", gc.diskMode || "snapshot");
+            setInputValue("opt-vde-net", gc.vdeNet || "192.168.100.0/24");
+            setInputValue("opt-base-ip", gc.baseIP || 10);
+            setInputValue("opt-base-ssh", gc.baseSSH || 2222);
+            setInputValue("opt-pkg-list", gc.pkgList || "");
+            setCheckbox("opt-no-nat", gc.noNat || false);
+            setCheckbox("opt-hub", gc.hub || false);
+            setCheckbox("opt-mirror", gc.mirror || false);
+            setInputValue("opt-password", gc.password || "");
+            setInputValue("opt-ssh-key", gc.sshKey || "");
+            setInputValue("opt-seeds-dir", gc.seedsDir || "");
+            setInputValue("opt-net-script", gc.netScript || "");
+            setInputValue("opt-wlan-count", gc.wlanCount || 1);
+
+            // Restaurer VMs
+            state.vms = (topo.vms || []).map(vm => ({
+                id: vm.id, label: vm.label || "", disk: vm.disk || "",
+                ram: vm.ram || null, cpu: vm.cpu || null,
+                diskMode: vm.diskMode || null,
+                backend: vm.backend || "cloudinit",
+                pkgList: vm.pkgList || null, wlanCount: vm.wlanCount || null,
+                x: vm.x ?? null, y: vm.y ?? null,
+            }));
+
+            // Restaurer serveur
+            if (topo.server) {
+                state.server = {
+                    backend: topo.server.backend || "cloudinit",
+                    disk: topo.server.disk || "",
+                    ram: topo.server.ram || null, cpu: topo.server.cpu || null,
+                    diskMode: topo.server.diskMode || null,
+                    x: topo.server.x ?? null, y: topo.server.y ?? null,
+                };
+            } else {
+                state.server = null;
+            }
+
+            // Restaurer position switch
+            if (topo.switchPos) {
+                state.switchPos.x = topo.switchPos.x ?? null;
+                state.switchPos.y = topo.switchPos.y ?? null;
+            }
+
+            state.nextVmId = state.vms.length > 0
+                ? Math.max(...state.vms.map(v => v.id)) + 1 : 1;
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     // --- Update helpers ---
 
     function updateAll() {
@@ -864,6 +984,7 @@
         Config.updateServerPanel(state);
         updateDiskWarning();
         updateRamWarning();
+        saveTopology();
     }
 
     function renderCanvas() {
