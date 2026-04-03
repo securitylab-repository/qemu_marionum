@@ -67,6 +67,7 @@
         setupHelpModal();
         setupFileBrowser();
         setupPanelResize();
+        setupExportImport();
 
         fetchMemory();
         setInterval(fetchMemory, 30000);
@@ -1301,6 +1302,200 @@
                 overlay.style.display = "none";
             }
         });
+    }
+
+    // --- Export / Import topologie ---
+
+    function setupExportImport() {
+        const btnExport = document.getElementById("btn-export");
+        const btnImport = document.getElementById("btn-import");
+        const fileInput = document.getElementById("import-file-input");
+
+        btnExport.addEventListener("click", exportTopology);
+        btnImport.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", (e) => {
+            if (e.target.files.length > 0) {
+                importTopology(e.target.files[0]);
+                fileInput.value = "";
+            }
+        });
+    }
+
+    function exportTopology() {
+        const data = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            appName: "EFREI PARIS QEMU WIFI LAB",
+            topology: {
+                vms: state.vms.map(vm => ({
+                    id: vm.id,
+                    label: vm.label || "",
+                    disk: vm.disk || "",
+                    ram: vm.ram,
+                    cpu: vm.cpu,
+                    diskMode: vm.diskMode,
+                    backend: vm.backend || "cloudinit",
+                    pkgList: vm.pkgList,
+                    wlanCount: vm.wlanCount,
+                    x: vm.x,
+                    y: vm.y,
+                })),
+                server: state.server ? {
+                    backend: state.server.backend || "cloudinit",
+                    disk: state.server.disk || "",
+                    ram: state.server.ram,
+                    cpu: state.server.cpu,
+                    diskMode: state.server.diskMode,
+                    x: state.server.x,
+                    y: state.server.y,
+                } : null,
+                switchPos: { x: state.switchPos.x, y: state.switchPos.y },
+            },
+            globalConfig: {
+                disk: document.getElementById("disk-path")?.value?.trim() || "",
+                ram: parseInt(document.getElementById("opt-ram")?.value, 10) || 1024,
+                cpu: parseInt(document.getElementById("opt-cpu")?.value, 10) || 2,
+                diskMode: document.getElementById("opt-disk-mode")?.value || "snapshot",
+                vdeNet: document.getElementById("opt-vde-net")?.value?.trim() || "192.168.100.0/24",
+                baseIP: parseInt(document.getElementById("opt-base-ip")?.value, 10) || 10,
+                baseSSH: parseInt(document.getElementById("opt-base-ssh")?.value, 10) || 2222,
+                pkgList: document.getElementById("opt-pkg-list")?.value?.trim() || "",
+                noNat: document.getElementById("opt-no-nat")?.checked || false,
+                hub: document.getElementById("opt-hub")?.checked || false,
+                mirror: document.getElementById("opt-mirror")?.checked || false,
+                password: document.getElementById("opt-password")?.value?.trim() || "",
+                sshKey: document.getElementById("opt-ssh-key")?.value?.trim() || "",
+                seedsDir: document.getElementById("opt-seeds-dir")?.value?.trim() || "",
+                netScript: document.getElementById("opt-net-script")?.value?.trim() || "",
+                wlanCount: parseInt(document.getElementById("opt-wlan-count")?.value, 10) || 1,
+            },
+        };
+
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const today = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `lab-topology-${today}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function importTopology(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            let data;
+            try {
+                data = JSON.parse(e.target.result);
+            } catch {
+                alert("Fichier JSON invalide.");
+                return;
+            }
+
+            if (!data.version || !data.topology) {
+                alert("Fichier invalide : champs 'version' et 'topology' requis.");
+                return;
+            }
+            if (data.version > 1) {
+                alert(`Version ${data.version} non supportee (max: 1).`);
+                return;
+            }
+
+            if (state.labRunning) {
+                if (!confirm("Un lab est en cours. Ecraser la topologie actuelle ?")) return;
+            }
+
+            // Alerte chemins disque
+            const diskPaths = [];
+            const gc = data.globalConfig || {};
+            if (gc.disk) diskPaths.push(gc.disk);
+            const topo = data.topology;
+            (topo.vms || []).forEach(vm => { if (vm.disk) diskPaths.push(vm.disk); });
+            if (topo.server && topo.server.disk) diskPaths.push(topo.server.disk);
+            if (diskPaths.length > 0) {
+                alert(
+                    "Chemins disque du fichier importe (a verifier/modifier) :\n\n" +
+                    diskPaths.map(p => "  - " + p).join("\n")
+                );
+            }
+
+            // Restaurer la config globale
+            setInputValue("disk-path", gc.disk || "");
+            setInputValue("opt-ram", gc.ram || 1024);
+            setInputValue("opt-cpu", gc.cpu || 2);
+            setInputValue("opt-disk-mode", gc.diskMode || "snapshot");
+            setInputValue("opt-vde-net", gc.vdeNet || "192.168.100.0/24");
+            setInputValue("opt-base-ip", gc.baseIP || 10);
+            setInputValue("opt-base-ssh", gc.baseSSH || 2222);
+            setInputValue("opt-pkg-list", gc.pkgList || "");
+            setCheckbox("opt-no-nat", gc.noNat || false);
+            setCheckbox("opt-hub", gc.hub || false);
+            setCheckbox("opt-mirror", gc.mirror || false);
+            setInputValue("opt-password", gc.password || "");
+            setInputValue("opt-ssh-key", gc.sshKey || "");
+            setInputValue("opt-seeds-dir", gc.seedsDir || "");
+            setInputValue("opt-net-script", gc.netScript || "");
+            setInputValue("opt-wlan-count", gc.wlanCount || 1);
+
+            // Restaurer la topologie
+            state.vms = (topo.vms || []).map(vm => ({
+                id: vm.id,
+                label: vm.label || "",
+                disk: vm.disk || "",
+                ram: vm.ram || null,
+                cpu: vm.cpu || null,
+                diskMode: vm.diskMode || null,
+                backend: vm.backend || "cloudinit",
+                pkgList: vm.pkgList || null,
+                wlanCount: vm.wlanCount || null,
+                x: vm.x ?? null,
+                y: vm.y ?? null,
+            }));
+
+            if (topo.server) {
+                state.server = {
+                    backend: topo.server.backend || "cloudinit",
+                    disk: topo.server.disk || "",
+                    ram: topo.server.ram || null,
+                    cpu: topo.server.cpu || null,
+                    diskMode: topo.server.diskMode || null,
+                    x: topo.server.x ?? null,
+                    y: topo.server.y ?? null,
+                };
+            } else {
+                state.server = null;
+            }
+
+            if (topo.switchPos) {
+                state.switchPos.x = topo.switchPos.x ?? null;
+                state.switchPos.y = topo.switchPos.y ?? null;
+            }
+
+            state.nextVmId = state.vms.length > 0
+                ? Math.max(...state.vms.map(v => v.id)) + 1
+                : 1;
+
+            state.selectedVmId = null;
+            state.selectedServerPanel = false;
+
+            updateAll();
+        };
+        reader.readAsText(file);
+    }
+
+    function setInputValue(id, val) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = val;
+    }
+
+    function setCheckbox(id, checked) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.checked = !!checked;
     }
 
     // --- Explorateur de fichiers ---
