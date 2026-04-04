@@ -124,10 +124,16 @@
                 if (state.selectedVmId === removed.id) {
                     state.selectedVmId = null;
                 }
-                // Renumeroter
-                state.vms.forEach((vm, i) => { vm.id = i + 1; });
-                state.nextVmId = state.vms.length + 1;
-                cleanPreservedState();
+                if (state.labRunning) {
+                    // Lab en cours : garder les IDs originaux
+                    const maxId = state.vms.reduce((m, v) => Math.max(m, v.id), 0);
+                    state.nextVmId = maxId + 1;
+                } else {
+                    // Lab arrete : renumeroter normalement
+                    state.vms.forEach((vm, i) => { vm.id = i + 1; });
+                    state.nextVmId = state.vms.length + 1;
+                }
+                cleanPreservedState(removed.id);
                 updateAll();
             }
         });
@@ -673,28 +679,43 @@
 
     /**
      * Nettoie /tmp/vde/ quand la topologie change (suppression de VM/serveur).
-     * Les anciens scripts ne correspondent plus a la nouvelle config.
+     * Si le lab tourne, arrete seulement la VM/serveur supprime(e).
+     * @param {string|number|null} vmId - ID de la VM supprimee (ou "server")
      */
-    function cleanPreservedState() {
+    function cleanPreservedState(vmId) {
         if (!state.labRunning && !state.hasPreservedState) return;
 
-        // Arreter le lab si running
-        if (state.labRunning) {
+        if (state.labRunning && vmId != null) {
+            // Arreter seulement la VM supprimee, garder les autres en vie
+            fetch("/api/vm/stop", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ vm_id: String(vmId) }),
+            })
+                .then(() => {
+                    const label = vmId === "server" ? "Serveur vwifi" : `VM${vmId}`;
+                    outputContent.textContent += `[INFO] ${label} arretee (supprimee de la topologie).\n`;
+                })
+                .catch(() => {});
+            // Le lab reste en marche avec les VMs restantes
+        } else if (state.labRunning) {
+            // Pas de vmId specifique — arreter tout le lab
             fetch("/api/stop", { method: "POST", headers: { "Content-Type": "application/json" } })
                 .then(() => fetch("/api/clean", { method: "POST", headers: { "Content-Type": "application/json" } }))
                 .then(() => {
                     outputContent.textContent += "[INFO] Lab arrete et nettoye (topologie modifiee).\n";
                 })
                 .catch(() => {});
+            setLabIdle();
         } else {
-            // Juste nettoyer les fichiers preserves
+            // Lab pas en cours — juste nettoyer les fichiers preserves
             fetch("/api/clean", { method: "POST", headers: { "Content-Type": "application/json" } })
                 .then(() => {
                     outputContent.textContent += "[INFO] Etat precedent nettoye (topologie modifiee).\n";
                 })
                 .catch(() => {});
+            setLabIdle();
         }
-        setLabIdle();
     }
 
     function addVM() {
@@ -723,18 +744,24 @@
         if (state.selectedVmId === vmId) {
             state.selectedVmId = null;
         }
-        // Renumeroter les VMs restantes (1, 2, 3, ...)
-        state.vms.forEach((vm, i) => {
-            vm.id = i + 1;
-        });
-        state.nextVmId = state.vms.length + 1;
+        if (state.labRunning) {
+            // Lab en cours : garder les IDs originaux pour correspondre aux scripts /tmp/vde/
+            const maxId = state.vms.reduce((m, v) => Math.max(m, v.id), 0);
+            state.nextVmId = maxId + 1;
+        } else {
+            // Lab arrete : renumeroter normalement (1, 2, 3, ...)
+            state.vms.forEach((vm, i) => {
+                vm.id = i + 1;
+            });
+            state.nextVmId = state.vms.length + 1;
+        }
         // Corriger selectedVmId si necessaire
         if (state.selectedVmId !== null) {
             const still = state.vms.find(v => v.id === state.selectedVmId);
             if (!still) state.selectedVmId = null;
         }
-        // Nettoyer /tmp/vde/ si un lab a ete lance (topologie modifiee)
-        cleanPreservedState();
+        // Arreter seulement la VM supprimee (pas tout le lab)
+        cleanPreservedState(vmId);
         updateAll();
     }
 
@@ -748,7 +775,7 @@
     function removeServer() {
         state.server = null;
         state.selectedServerPanel = false;
-        cleanPreservedState();
+        cleanPreservedState("server");
         updateAll();
     }
 
